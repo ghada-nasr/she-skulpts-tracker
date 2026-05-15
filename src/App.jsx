@@ -569,6 +569,8 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
   const [showAddDay, setShowAddDay] = useState(false)
   const [saving, setSaving] = useState(false)
   const [runLogs, setRunLogs] = useState({}) // blockId -> { actual_weight, actual_reps, notes }
+  const [clientFilter2, setClientFilter2] = useState('')
+  const [confirmDeleteProgram, setConfirmDeleteProgram] = useState(null)
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -940,41 +942,108 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
   }
 
   // Programs list
+  const deleteProgram = async (p) => {
+    await supabase.from('programs').delete().eq('id', p.id)
+    setPrograms(prev => prev.filter(x => x.id !== p.id))
+    setConfirmDeleteProgram(null)
+    showToast('Program deleted')
+  }
+
+  const filteredPrograms = clientFilter2 ? programs.filter(p => p.client_id === clientFilter2) : programs
+
+  // Group by client
+  const grouped = {}
+  filteredPrograms.forEach(p => {
+    const cName = clients.find(cl => cl.id === p.client_id)?.name || 'Unknown'
+    if (!grouped[cName]) grouped[cName] = []
+    grouped[cName].push(p)
+  })
+
   return (
     <div style={{ minHeight: '100vh', background: C.creamLight, paddingBottom: 90 }}>
       <Header title="Programs" right={
-        <button onClick={() => setView('new_program')} style={{ background: C.sage, border: 'none', borderRadius: 8, padding: '7px 14px', color: C.white, fontFamily: MONO, fontSize: 11, letterSpacing: '1px', cursor: 'pointer' }}>+ New</button>
+        <button onClick={() => setView('new_program')} style={{ background: C.white, border: 'none', borderRadius: 8, padding: '6px 13px', color: C.sage, fontFamily: MONO, fontSize: 10, letterSpacing: '1px', cursor: 'pointer' }}>+ New</button>
       } />
+
+      {/* Client filter pills */}
+      <div style={{ background: C.sage, padding: '0 16px 12px', display: 'flex', gap: 6, overflowX: 'auto' }}>
+        <button onClick={() => setClientFilter2('')} style={{
+          padding: '4px 12px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap',
+          borderColor: clientFilter2 === '' ? C.white : `${C.white}50`,
+          background: clientFilter2 === '' ? C.white : 'transparent',
+          color: clientFilter2 === '' ? C.sageDark : C.white,
+          fontSize: 9, letterSpacing: '2px', textTransform: 'uppercase', fontFamily: MONO, cursor: 'pointer',
+        }}>All</button>
+        {clients.map(c => (
+          <button key={c.id} onClick={() => setClientFilter2(c.id)} style={{
+            padding: '4px 12px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap',
+            borderColor: clientFilter2 === c.id ? C.white : `${C.white}50`,
+            background: clientFilter2 === c.id ? C.white : 'transparent',
+            color: clientFilter2 === c.id ? C.sageDark : C.white,
+            fontSize: 9, letterSpacing: '2px', textTransform: 'uppercase', fontFamily: MONO, cursor: 'pointer',
+          }}>{c.name}</button>
+        ))}
+      </div>
+
       <div style={{ padding: '14px 16px' }}>
-        {selectedClient && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Mono style={{ fontSize: 10, color: C.sageMid }}>Showing programs for: <strong style={{ color: C.sageDark }}>{selectedClient.name}</strong></Mono>
-            <button onClick={() => setSelectedClient(null)} style={{ background: 'none', border: 'none', color: C.sage, fontFamily: MONO, fontSize: 10, cursor: 'pointer' }}>Show all</button>
-          </div>
-        )}
-        {loading ? <Spinner /> : programs.length === 0 ? (
+        {loading ? <Spinner /> : filteredPrograms.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <p style={{ fontFamily: MONO, color: C.sageMid, fontSize: 12 }}>No programs yet.</p>
-            <p style={{ fontFamily: MONO, color: C.sageMid, fontSize: 11, marginTop: 8 }}>Tap + New to create one for a client.</p>
           </div>
-        ) : programs.map(p => {
-          const c = clients.find(cl => cl.id === p.client_id)
-          return (
-            <Card key={p.id} onClick={() => { setActiveProgram(p); setActiveDayIndex(0); setActiveDay(null); setProgramDays([]); setDayBlocks([]); loadProgramDays(p.id); setView('program') }}
-              accent={p.is_active ? C.sage : C.creamDark}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <span style={{ fontSize: 17, color: C.sageDark, fontFamily: SERIF, display: 'block' }}>{p.title}</span>
-                  <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 2 }}>{c?.name || 'Unknown'} · {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</Mono>
+        ) : Object.entries(grouped).map(([clientName, progs]) => (
+          <div key={clientName} style={{ marginBottom: 20 }}>
+            {/* Client section header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 2 }}>
+              <span style={{ fontFamily: IMPACT, fontSize: 13, letterSpacing: '2px', color: C.sage, textTransform: 'uppercase' }}>{clientName}</span>
+              <div style={{ flex: 1, height: 1, background: `${C.sage}30` }} />
+              <Mono style={{ fontSize: 9, color: C.sageMid }}>{progs.length} program{progs.length !== 1 ? 's' : ''}</Mono>
+            </div>
+            {progs.map(p => (
+              <div key={p.id} style={{
+                background: C.white, borderRadius: 10, marginBottom: 7,
+                borderLeft: `3px solid ${p.is_active ? C.sage : C.creamDark}`,
+                boxShadow: '0 1px 4px rgba(0,0,0,.05)',
+                overflow: 'hidden',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}
+                  onClick={() => { setActiveProgram(p); setActiveDayIndex(0); setActiveDay(null); setProgramDays([]); setDayBlocks([]); loadProgramDays(p.id); setView('program') }}>
+                  <div style={{ flex: 1, padding: '11px 14px', cursor: 'pointer' }}>
+                    <span style={{ fontFamily: INCISED, fontSize: 13, fontWeight: 600, color: C.sageDark, letterSpacing: '0.5px', display: 'block', lineHeight: 1.3 }}>{p.title}</span>
+                    <Mono style={{ fontSize: 9, color: C.sageMid, marginTop: 3 }}>
+                      {new Date(p.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Mono>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 10 }}>
+                    <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: p.is_active ? `${C.sage}20` : `${C.creamDark}40`, color: p.is_active ? C.sage : C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
+                      {p.is_active ? 'Active' : 'Archived'}
+                    </Mono>
+                    <button onClick={e => { e.stopPropagation(); setConfirmDeleteProgram(p) }} style={{
+                      background: 'none', border: `1px solid ${C.amber}40`, borderRadius: 6,
+                      padding: '3px 7px', fontSize: 10, color: C.amber, cursor: 'pointer', fontFamily: MONO,
+                    }}>✕</button>
+                  </div>
                 </div>
-                <Mono style={{ fontSize: 8, padding: '3px 9px', borderRadius: 99, background: p.is_active ? `${C.sage}20` : `${C.creamDark}40`, color: p.is_active ? C.sage : C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-                  {p.is_active ? 'Active' : 'Archived'}
-                </Mono>
               </div>
-            </Card>
-          )
-        })}
+            ))}
+          </div>
+        ))}
       </div>
+
+      {/* Confirm Delete Program Modal */}
+      {confirmDeleteProgram && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}>
+          <div style={{ background: C.creamLight, borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 340 }}>
+            <h2 style={{ fontFamily: INCISED, fontWeight: 600, fontSize: 16, color: C.sageDark, marginBottom: 8 }}>Delete Program?</h2>
+            <p style={{ fontFamily: MONO, fontSize: 11, color: C.sageMid, marginBottom: 4 }}>{confirmDeleteProgram.title}</p>
+            <p style={{ fontFamily: MONO, fontSize: 11, color: C.amber, marginBottom: 20 }}>This will delete the program and all its days and exercises.</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDeleteProgram(null)} style={{ flex: 1, padding: 12, background: 'none', border: `1px solid ${C.creamDark}`, borderRadius: 10, fontSize: 12, fontFamily: MONO, color: C.sageMid, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => deleteProgram(confirmDeleteProgram)} style={{ flex: 1, padding: 12, background: C.amber, border: 'none', borderRadius: 10, fontSize: 12, fontFamily: MONO, color: C.white, cursor: 'pointer' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && <Toast msg={toast} />}
       <BottomNav tab="programs" setTab={() => {}} />
     </div>
