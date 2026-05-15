@@ -10,6 +10,8 @@ const C = {
   white: '#FFFFFF', amber: '#B8732A',
 }
 const MONO = "'DM Mono', monospace"
+const IMPACT = "Impact, 'Arial Narrow', sans-serif"
+const INCISED = "'Trebuchet MS', 'DM Sans', sans-serif"
 const SERIF = "'Libre Baskerville', Georgia, serif"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -72,16 +74,16 @@ const Header = ({ title, subtitle, onBack, right }) => (
       <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.creamLight, fontSize: 12, fontFamily: MONO, padding: 0, marginBottom: 10, cursor: 'pointer' }}>← Back</button>
     )}
     {!onBack && (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-        <Mono style={{ fontSize: 8, letterSpacing: '4px', color: C.creamLight, textTransform: 'uppercase' }}>She Skulpts</Mono>
-        <Mono style={{ fontSize: 8, color: `${C.cream}70` }}>·</Mono>
-        <Mono style={{ fontSize: 8, letterSpacing: '2px', color: `${C.cream}90`, textTransform: 'uppercase', fontStyle: 'italic' }}>it's you, just sculpted</Mono>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <span style={{ fontFamily: IMPACT, fontSize: 15, letterSpacing: '2px', color: C.white, textTransform: 'uppercase', lineHeight: 1 }}>SHE SKULPTS</span>
+        <span style={{ color: `${C.creamLight}60`, fontSize: 10 }}>·</span>
+        <span style={{ fontFamily: INCISED, fontSize: 9, letterSpacing: '3px', color: C.creamLight, textTransform: 'uppercase', opacity: 0.85 }}>it's you, just sculpted</span>
       </div>
     )}
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
       <div>
-        <h1 style={{ margin: 0, fontSize: onBack ? 24 : 26, fontWeight: 400, color: C.white, fontFamily: SERIF, lineHeight: 1.1 }}>{title}</h1>
-        {subtitle && <Mono style={{ fontSize: 11, color: C.creamLight, marginTop: 4, display: 'block' }}>{subtitle}</Mono>}
+        <h1 style={{ margin: 0, fontSize: onBack ? 22 : 24, fontWeight: 700, color: C.white, fontFamily: IMPACT, letterSpacing: '1px', textTransform: 'uppercase', lineHeight: 1.1 }}>{title}</h1>
+        {subtitle && <span style={{ fontFamily: INCISED, fontSize: 11, color: C.creamLight, marginTop: 4, display: 'block', letterSpacing: '1px', opacity: 0.9 }}>{subtitle}</span>}
       </div>
       {right}
     </div>
@@ -192,18 +194,18 @@ function ClientsTab({ clients, setClients, setSelectedClient, setTab }) {
 
       <div style={{ background: C.sage, padding: '0 20px 14px' }}>
         {nearEnd.length > 0 && (
-          <div style={{ background: `${C.amber}25`, border: `1px solid ${C.amber}60`, borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>
+          <div style={{ background: C.cream, border: `1px solid ${C.amber}60`, borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>
             <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.amber, textTransform: 'uppercase', display: 'block' }}>Ending Soon</Mono>
-            <span style={{ fontSize: 13, color: C.white, fontFamily: SERIF, marginTop: 2, display: 'block' }}>{nearEnd.map(c => c.name).join('  ·  ')}</span>
+            <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF, marginTop: 2, display: 'block' }}>{nearEnd.map(c => c.name).join('  ·  ')}</span>
           </div>
         )}
         <div style={{ display: 'flex', gap: 6 }}>
           {['all', 'active', 'completed'].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '4px 12px', borderRadius: 99, border: '1px solid',
-              borderColor: filter === f ? C.white : `${C.white}40`,
-              background: filter === f ? `${C.white}25` : 'transparent',
-              color: filter === f ? C.white : `${C.white}60`,
+              borderColor: filter === f ? C.white : `${C.white}60`,
+              background: filter === f ? C.white : 'transparent',
+              color: filter === f ? C.sageDark : C.white,
               fontSize: 9, letterSpacing: '2px', textTransform: 'uppercase', fontFamily: MONO, cursor: 'pointer',
             }}>{f}</button>
           ))}
@@ -741,24 +743,98 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
                 <span style={{ fontSize: 16, color: C.sageDark, fontFamily: SERIF }}>{activeDay.theme}</span>
               </Card>
 
-              {dayBlocks.map((b, i) => (
-                <Card key={b.id} style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                    <span style={{ fontSize: 15, color: C.sageDark, fontFamily: SERIF, flex: 1 }}>{b.exercise_name}</span>
-                    <Mono style={{ fontSize: 9, background: `${C.sage}20`, padding: '2px 8px', borderRadius: 99, color: C.sageDark, textTransform: 'uppercase', letterSpacing: '1px' }}>{b.block_type}</Mono>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                    {[{ l: 'Sets', v: b.sets }, { l: 'Reps', v: b.reps }, { l: 'Weight', v: b.weight }].map(x => (
-                      <div key={x.l}>
-                        <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block' }}>{x.l}</Mono>
-                        <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF }}>{x.v || '—'}</span>
+              {(() => {
+                // Group consecutive blocks that share the same block_type (non-single) and letter prefix
+                const groups = []
+                let i = 0
+                while (i < dayBlocks.length) {
+                  const b = dayBlocks[i]
+                  const note = b.notes || ''
+                  const letterMatch = note.match(/^([A-Z])\d/)
+                  const letter = letterMatch ? letterMatch[1] : null
+                  if (b.block_type !== 'single' && letter) {
+                    // Collect all blocks with same letter prefix
+                    const group = [b]
+                    let j = i + 1
+                    while (j < dayBlocks.length) {
+                      const nb = dayBlocks[j]
+                      const nm = (nb.notes || '').match(/^([A-Z])\d/)
+                      if (nm && nm[1] === letter && nb.block_type === b.block_type) {
+                        group.push(nb)
+                        j++
+                      } else break
+                    }
+                    groups.push({ type: 'group', blocks: group, blockType: b.block_type, letter })
+                    i = j
+                  } else {
+                    groups.push({ type: 'single', block: b })
+                    i++
+                  }
+                }
+
+                const blockTypeColor = { superset: '#7BA7A0', triset: C.sage, complex: C.amber }
+                const blockTypeBg = { superset: '#7BA7A020', triset: `${C.sage}15`, complex: `${C.amber}15` }
+
+                return groups.map((g, gi) => {
+                  if (g.type === 'single') {
+                    const b = g.block
+                    return (
+                      <Card key={b.id} style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <span style={{ fontSize: 15, color: C.sageDark, fontFamily: SERIF, flex: 1 }}>{b.exercise_name}</span>
+                          <Mono style={{ fontSize: 9, background: `${C.sage}20`, padding: '2px 8px', borderRadius: 99, color: C.sageDark, textTransform: 'uppercase', letterSpacing: '1px' }}>single</Mono>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                          {[{ l: 'Sets', v: b.sets }, { l: 'Reps', v: b.reps }, { l: 'Weight', v: b.weight }].map(x => (
+                            <div key={x.l}>
+                              <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block' }}>{x.l}</Mono>
+                              <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF }}>{x.v || '—'}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {b.focus && <Mono style={{ fontSize: 10, color: C.sage, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
+                        {b.notes && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 3, display: 'block' }}>{b.notes}</Mono>}
+                      </Card>
+                    )
+                  }
+
+                  // Grouped block (superset / triset / complex)
+                  const color = blockTypeColor[g.blockType] || C.sage
+                  const bg = blockTypeBg[g.blockType] || `${C.sage}15`
+                  return (
+                    <div key={gi} style={{ marginBottom: 14, borderRadius: 12, overflow: 'hidden', border: `2px solid ${color}40` }}>
+                      {/* Group header */}
+                      <div style={{ background: color, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontFamily: IMPACT, fontSize: 13, color: C.white, letterSpacing: '2px', textTransform: 'uppercase' }}>{g.blockType.toUpperCase()}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 9, color: `${C.white}80`, letterSpacing: '2px' }}>Block {g.letter} · {g.blocks.length} exercises</span>
                       </div>
-                    ))}
-                  </div>
-                  {b.focus && <Mono style={{ fontSize: 10, color: C.sage, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
-                  {b.notes && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 3, display: 'block' }}>{b.notes}</Mono>}
-                </Card>
-              ))}
+                      {/* Exercises */}
+                      {g.blocks.map((b, bi) => (
+                        <div key={b.id} style={{
+                          padding: '12px 14px',
+                          background: bi % 2 === 0 ? C.white : `${color}08`,
+                          borderTop: bi > 0 ? `1px dashed ${color}30` : 'none',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 15, color: C.sageDark, fontFamily: SERIF, flex: 1 }}>{b.exercise_name}</span>
+                            <Mono style={{ fontSize: 9, color: color, letterSpacing: '1px' }}>{b.notes?.split(' - ')[0] || ''}</Mono>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                            {[{ l: 'Sets', v: b.sets }, { l: 'Reps', v: b.reps }, { l: 'Weight', v: b.weight }].map(x => (
+                              <div key={x.l}>
+                                <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block' }}>{x.l}</Mono>
+                                <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF }}>{x.v || '—'}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {b.focus && <Mono style={{ fontSize: 10, color: color, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
+                          {b.notes && b.notes.includes(' - ') && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 2, display: 'block' }}>{b.notes.split(' - ').slice(1).join(' - ')}</Mono>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })
+              })()}
 
               {activeProgram.is_active && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -1185,7 +1261,7 @@ export default function App() {
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '4px', color: C.sage, textTransform: 'uppercase', marginBottom: 8 }}>She Skulpts</div>
+        <div style={{ fontFamily: IMPACT, fontSize: 22, letterSpacing: '3px', color: C.sage, textTransform: 'uppercase', marginBottom: 4 }}>SHE SKULPTS</div>
         <div style={{ fontFamily: SERIF, fontSize: 22, color: C.sageDark, marginBottom: 30 }}>Loading...</div>
         <Spinner />
       </div>
