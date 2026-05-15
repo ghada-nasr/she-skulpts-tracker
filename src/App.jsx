@@ -67,21 +67,21 @@ const Spinner = () => (
 )
 
 const Header = ({ title, subtitle, onBack, right }) => (
-  <div style={{ background: C.sageDark, padding: onBack ? '18px 20px 20px' : '26px 20px 18px', position: 'sticky', top: 0, zIndex: 20 }}>
+  <div style={{ background: C.sage, padding: onBack ? '18px 20px 20px' : '26px 20px 18px', position: 'sticky', top: 0, zIndex: 20 }}>
     {onBack && (
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.sageLight, fontSize: 12, fontFamily: MONO, padding: 0, marginBottom: 10, cursor: 'pointer' }}>← Back</button>
+      <button onClick={onBack} style={{ background: 'none', border: 'none', color: C.creamLight, fontSize: 12, fontFamily: MONO, padding: 0, marginBottom: 10, cursor: 'pointer' }}>← Back</button>
     )}
     {!onBack && (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-        <Mono style={{ fontSize: 8, letterSpacing: '4px', color: C.sageLight, textTransform: 'uppercase' }}>She Skulpts</Mono>
-        <Mono style={{ fontSize: 8, color: `${C.sageLight}50` }}>·</Mono>
-        <Mono style={{ fontSize: 8, letterSpacing: '2px', color: `${C.sageLight}60`, textTransform: 'uppercase', fontStyle: 'italic' }}>it's you, just sculpted</Mono>
+        <Mono style={{ fontSize: 8, letterSpacing: '4px', color: C.creamLight, textTransform: 'uppercase' }}>She Skulpts</Mono>
+        <Mono style={{ fontSize: 8, color: `${C.cream}70` }}>·</Mono>
+        <Mono style={{ fontSize: 8, letterSpacing: '2px', color: `${C.cream}90`, textTransform: 'uppercase', fontStyle: 'italic' }}>it's you, just sculpted</Mono>
       </div>
     )}
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
       <div>
-        <h1 style={{ margin: 0, fontSize: onBack ? 24 : 26, fontWeight: 400, color: C.creamLight, fontFamily: SERIF, lineHeight: 1.1 }}>{title}</h1>
-        {subtitle && <Mono style={{ fontSize: 11, color: C.sageLight, marginTop: 4, display: 'block' }}>{subtitle}</Mono>}
+        <h1 style={{ margin: 0, fontSize: onBack ? 24 : 26, fontWeight: 400, color: C.white, fontFamily: SERIF, lineHeight: 1.1 }}>{title}</h1>
+        {subtitle && <Mono style={{ fontSize: 11, color: C.creamLight, marginTop: 4, display: 'block' }}>{subtitle}</Mono>}
       </div>
       {right}
     </div>
@@ -89,7 +89,7 @@ const Header = ({ title, subtitle, onBack, right }) => (
 )
 
 const BottomNav = ({ tab, setTab }) => (
-  <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sageDark, display: 'flex', borderTop: `1px solid ${C.sageMid}60`, paddingBottom: 'env(safe-area-inset-bottom, 12px)', zIndex: 50 }}>
+  <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sage, display: 'flex', borderTop: `1px solid ${C.sageLight}60`, paddingBottom: 'env(safe-area-inset-bottom, 12px)', zIndex: 50 }}>
     {[
       { id: 'clients', label: 'Clients', icon: '◈' },
       { id: 'programs', label: 'Programs', icon: '◇' },
@@ -97,8 +97,8 @@ const BottomNav = ({ tab, setTab }) => (
       { id: 'revenue', label: 'Revenue', icon: '◎' },
     ].map(t => (
       <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: '10px 0 6px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-        <span style={{ fontSize: 16, color: tab === t.id ? C.sageLight : `${C.cream}30`, transition: 'color .2s' }}>{t.icon}</span>
-        <Mono style={{ fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: tab === t.id ? C.sageLight : `${C.cream}25`, transition: 'color .2s' }}>{t.label}</Mono>
+        <span style={{ fontSize: 16, color: tab === t.id ? C.white : `${C.creamLight}70`, transition: 'color .2s' }}>{t.icon}</span>
+        <Mono style={{ fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', color: tab === t.id ? C.white : `${C.creamLight}70`, transition: 'color .2s' }}>{t.label}</Mono>
       </button>
     ))}
   </div>
@@ -190,20 +190,20 @@ function ClientsTab({ clients, setClients, setSelectedClient, setTab }) {
         }
       />
 
-      <div style={{ background: C.sageDark, padding: '0 20px 14px' }}>
+      <div style={{ background: C.sage, padding: '0 20px 14px' }}>
         {nearEnd.length > 0 && (
-          <div style={{ background: `${C.amber}20`, border: `1px solid ${C.amber}50`, borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>
+          <div style={{ background: `${C.amber}25`, border: `1px solid ${C.amber}60`, borderRadius: 8, padding: '7px 12px', marginBottom: 10 }}>
             <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.amber, textTransform: 'uppercase', display: 'block' }}>Ending Soon</Mono>
-            <span style={{ fontSize: 13, color: C.creamLight, fontFamily: SERIF, marginTop: 2, display: 'block' }}>{nearEnd.map(c => c.name).join('  ·  ')}</span>
+            <span style={{ fontSize: 13, color: C.white, fontFamily: SERIF, marginTop: 2, display: 'block' }}>{nearEnd.map(c => c.name).join('  ·  ')}</span>
           </div>
         )}
         <div style={{ display: 'flex', gap: 6 }}>
           {['all', 'active', 'completed'].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: '4px 12px', borderRadius: 99, border: '1px solid',
-              borderColor: filter === f ? C.sageLight : `${C.cream}20`,
-              background: filter === f ? `${C.sageLight}25` : 'transparent',
-              color: filter === f ? C.sageLight : `${C.cream}40`,
+              borderColor: filter === f ? C.white : `${C.white}40`,
+              background: filter === f ? `${C.white}25` : 'transparent',
+              color: filter === f ? C.white : `${C.white}60`,
               fontSize: 9, letterSpacing: '2px', textTransform: 'uppercase', fontFamily: MONO, cursor: 'pointer',
             }}>{f}</button>
           ))}
@@ -389,10 +389,10 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
       <Header title={client.name} subtitle={`${fmt(client.rate)} · ${client.package_size} sessions/pkg`} onBack={() => setTab('clients')} />
 
       {/* Package progress */}
-      <div style={{ background: C.sageDark, padding: '0 20px 18px' }}>
-        <div style={{ background: '#ffffff12', borderRadius: 10, padding: 14 }}>
+      <div style={{ background: C.sage, padding: '0 20px 18px' }}>
+        <div style={{ background: '#ffffff20', borderRadius: 10, padding: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <Mono style={{ fontSize: 9, letterSpacing: '2px', color: C.sageLight, textTransform: 'uppercase' }}>Package {client.current_package}</Mono>
+            <Mono style={{ fontSize: 9, letterSpacing: '2px', color: C.creamLight, textTransform: 'uppercase' }}>Package {client.current_package}</Mono>
             <Badge status={client.status} />
           </div>
           <ProgressBar done={client.sessions_completed} total={client.package_size} />
@@ -467,7 +467,7 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
           + Log Session
         </button>
         {isDone && (
-          <button onClick={startNewPackage} style={{ flex: 1, padding: 14, background: C.sageDark, color: C.cream, border: 'none', borderRadius: 10, fontSize: 12, fontFamily: MONO, letterSpacing: '1.5px', textTransform: 'uppercase', cursor: 'pointer' }}>
+          <button onClick={startNewPackage} style={{ flex: 1, padding: 14, background: C.sageMid, color: C.cream, border: 'none', borderRadius: 10, fontSize: 12, fontFamily: MONO, letterSpacing: '1.5px', textTransform: 'uppercase', cursor: 'pointer' }}>
             New Pkg →
           </button>
         )}
@@ -715,7 +715,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
         />
         {/* Day tabs */}
         {programDays.length > 0 && (
-          <div style={{ background: C.sageDark, padding: '0 16px 14px', display: 'flex', gap: 6, overflowX: 'auto' }}>
+          <div style={{ background: C.sage, padding: '0 16px 14px', display: 'flex', gap: 6, overflowX: 'auto' }}>
             {programDays.map((d, i) => (
               <button key={d.id} onClick={() => { setActiveDayIndex(i); setActiveDay(d); loadDayBlocks(d.id) }} style={{
                 padding: '6px 14px', borderRadius: 99, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
@@ -1098,19 +1098,19 @@ function RevenueTab({ clients }) {
       <Header title="Revenue" />
       <div style={{ padding: '14px 16px 0' }}>
         {/* Big number */}
-        <div style={{ background: C.sageDark, borderRadius: 14, padding: '18px 20px', marginBottom: 10 }}>
-          <Mono style={{ fontSize: 9, letterSpacing: '3px', color: C.sageLight, textTransform: 'uppercase', display: 'block' }}>Confirmed Earned</Mono>
-          <div style={{ fontSize: 40, fontWeight: 400, color: C.creamLight, fontFamily: SERIF, marginTop: 4, lineHeight: 1 }}>
+        <div style={{ background: C.sage, borderRadius: 14, padding: '18px 20px', marginBottom: 10 }}>
+          <Mono style={{ fontSize: 9, letterSpacing: '3px', color: C.creamLight, textTransform: 'uppercase', display: 'block' }}>Confirmed Earned</Mono>
+          <div style={{ fontSize: 40, fontWeight: 400, color: C.white, fontFamily: SERIF, marginTop: 4, lineHeight: 1 }}>
             {fmt(totalEarned)}
           </div>
-          <div style={{ display: 'flex', gap: 24, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.sageMid}60` }}>
+          <div style={{ display: 'flex', gap: 24, marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.sageLight}60` }}>
             <div>
-              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.sageLight, textTransform: 'uppercase', display: 'block' }}>In Progress</Mono>
+              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.creamLight, textTransform: 'uppercase', display: 'block' }}>In Progress</Mono>
               <span style={{ fontSize: 16, color: C.amber, fontFamily: SERIF }}>{fmt(totalIP)}</span>
             </div>
             <div>
-              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.sageLight, textTransform: 'uppercase', display: 'block' }}>All-Time Est.</Mono>
-              <span style={{ fontSize: 16, color: C.creamLight, fontFamily: SERIF }}>{fmt(totalEarned + totalIP)}</span>
+              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.creamLight, textTransform: 'uppercase', display: 'block' }}>All-Time Est.</Mono>
+              <span style={{ fontSize: 16, color: C.white, fontFamily: SERIF }}>{fmt(totalEarned + totalIP)}</span>
             </div>
           </div>
         </div>
@@ -1151,7 +1151,7 @@ function RevenueTab({ clients }) {
           )
         })}
 
-        <button onClick={exportAll} style={{ width: '100%', padding: 14, background: C.sageDark, color: C.cream, border: 'none', borderRadius: 10, fontSize: 12, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 4 }}>
+        <button onClick={exportAll} style={{ width: '100%', padding: 14, background: C.sage, color: C.white, border: 'none', borderRadius: 10, fontSize: 12, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 4 }}>
           ↓ Export All Session Logs
         </button>
       </div>
@@ -1184,9 +1184,9 @@ export default function App() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: C.sageDark, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '4px', color: C.sageLight, textTransform: 'uppercase', marginBottom: 8 }}>She Skulpts</div>
-        <div style={{ fontFamily: SERIF, fontSize: 22, color: C.creamLight, marginBottom: 30 }}>Loading...</div>
+      <div style={{ minHeight: '100vh', background: C.cream, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ fontFamily: MONO, fontSize: 10, letterSpacing: '4px', color: C.sage, textTransform: 'uppercase', marginBottom: 8 }}>She Skulpts</div>
+        <div style={{ fontFamily: SERIF, fontSize: 22, color: C.sageDark, marginBottom: 30 }}>Loading...</div>
         <Spinner />
       </div>
     )
