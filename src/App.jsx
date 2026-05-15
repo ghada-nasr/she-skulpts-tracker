@@ -274,6 +274,9 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
   const [logForm, setLogForm] = useState({ date: today(), location: client.location || '', note: '', cancelled: false })
   const [toast, setToast] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [editSession, setEditSession] = useState(null) // session being edited
+  const [editForm, setEditForm] = useState({ date: '', location: '', note: '', cancelled: false })
+  const [confirmDelete, setConfirmDelete] = useState(null) // session id to delete
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -286,6 +289,43 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
     const { data } = await supabase.from('sessions').select('*').eq('client_id', client.id).order('created_at', { ascending: true })
     setSessions(data || [])
     setLoading(false)
+  }
+
+  const deleteSession = async (session) => {
+    const { error } = await supabase.from('sessions').delete().eq('id', session.id)
+    if (!error) {
+      // Update client counts
+      const adj = session.cancelled ? 0 : -1
+      const adjCancel = session.cancelled ? -1 : 0
+      const updates = {
+        sessions_completed: Math.max(0, client.sessions_completed + adj),
+        cancellations: Math.max(0, client.cancellations + adjCancel),
+      }
+      await supabase.from('clients').update(updates).eq('id', client.id)
+      const updatedClient = { ...client, ...updates, status: 'active' }
+      setClients(prev => prev.map(c => c.id === client.id ? updatedClient : c))
+      setSelectedClient(updatedClient)
+      setConfirmDelete(null)
+      await loadSessions()
+      showToast('Session deleted')
+    }
+  }
+
+  const saveEdit = async () => {
+    if (!editSession) return
+    setSaving(true)
+    const { error } = await supabase.from('sessions').update({
+      date: editForm.date,
+      location: editForm.location,
+      note: editForm.note,
+      cancelled: editForm.cancelled,
+    }).eq('id', editSession.id)
+    if (!error) {
+      await loadSessions()
+      setEditSession(null)
+      showToast('Session updated ✓')
+    }
+    setSaving(false)
   }
 
   const logSession = async () => {
@@ -397,15 +437,24 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
               <div key={s.id || i} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 padding: '9px 12px', background: C.white, borderRadius: 8, marginBottom: 5,
-                opacity: s.cancelled ? 0.45 : 1,
+                opacity: s.cancelled ? 0.55 : 1,
                 borderLeft: s.cancelled ? `2px solid ${C.amber}` : '2px solid transparent',
                 boxShadow: '0 1px 3px rgba(0,0,0,.04)',
               }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF, display: 'block' }}>{s.note}</span>
                   <Mono style={{ fontSize: 10, color: C.sageMid }}>{s.date} · {s.location}</Mono>
                 </div>
-                <span style={{ fontSize: 14, color: s.cancelled ? C.amber : C.sage }}>{s.cancelled ? '✕' : '✓'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button onClick={() => { setEditSession(s); setEditForm({ date: s.date, location: s.location || '', note: s.note, cancelled: s.cancelled }) }}
+                    style={{ background: 'none', border: `1px solid ${C.sageLight}`, borderRadius: 6, padding: '3px 8px', fontSize: 10, color: C.sageMid, fontFamily: MONO, cursor: 'pointer' }}>
+                    Edit
+                  </button>
+                  <button onClick={() => setConfirmDelete(s)}
+                    style={{ background: 'none', border: `1px solid ${C.amber}40`, borderRadius: 6, padding: '3px 8px', fontSize: 10, color: C.amber, fontFamily: MONO, cursor: 'pointer' }}>
+                    ✕
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -445,6 +494,50 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
             <button onClick={logSession} disabled={saving} style={{ width: '100%', padding: 16, background: logForm.cancelled ? C.amber : C.sage, color: C.white, border: 'none', borderRadius: 12, fontSize: 13, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 8 }}>
               {saving ? 'Saving...' : logForm.cancelled ? 'Log Cancellation' : 'Log Session'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Session Modal */}
+      {editSession && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: C.creamLight, borderRadius: '16px 16px 0 0', padding: '24px 20px 40px', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 20, color: C.sageDark }}>Edit Session</h2>
+              <button onClick={() => setEditSession(null)} style={{ background: 'none', border: 'none', fontSize: 20, color: C.sageMid, cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: C.white, borderRadius: 10, padding: '14px 16px', marginBottom: 12 }}>
+              <span style={{ fontSize: 15, color: C.sageDark, fontFamily: SERIF }}>Cancellation</span>
+              <div onClick={() => setEditForm(f => ({ ...f, cancelled: !f.cancelled }))} style={{ width: 48, height: 26, borderRadius: 13, background: editForm.cancelled ? C.amber : C.creamDark, position: 'relative', cursor: 'pointer', transition: 'background .2s' }}>
+                <div style={{ position: 'absolute', top: 3, left: editForm.cancelled ? 25 : 3, width: 20, height: 20, borderRadius: '50%', background: C.white, transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
+              </div>
+            </div>
+            <Input label="Date" value={editForm.date} onChange={v => setEditForm(f => ({ ...f, date: v }))} placeholder="e.g. 16 May 2026" />
+            <Input label="Location" value={editForm.location} onChange={v => setEditForm(f => ({ ...f, location: v }))} placeholder="Online / JVC..." />
+            <Input label="Note" value={editForm.note} onChange={v => setEditForm(f => ({ ...f, note: v }))} placeholder="Session note" />
+            <button onClick={saveEdit} disabled={saving} style={{ width: '100%', padding: 16, background: C.sage, color: C.white, border: 'none', borderRadius: 12, fontSize: 13, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 8 }}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 20px' }}>
+          <div style={{ background: C.creamLight, borderRadius: 16, padding: '24px 20px', width: '100%', maxWidth: 340 }}>
+            <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 20, color: C.sageDark, marginBottom: 8 }}>Delete Session?</h2>
+            <p style={{ fontFamily: MONO, fontSize: 12, color: C.sageMid, marginBottom: 6 }}>{confirmDelete.note}</p>
+            <p style={{ fontFamily: MONO, fontSize: 11, color: C.sageMid, marginBottom: 20 }}>{confirmDelete.date} · {confirmDelete.location}</p>
+            <p style={{ fontFamily: MONO, fontSize: 11, color: C.amber, marginBottom: 20 }}>This cannot be undone.</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, padding: 14, background: 'none', border: `1px solid ${C.creamDark}`, borderRadius: 10, fontSize: 13, fontFamily: MONO, color: C.sageMid, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={() => deleteSession(confirmDelete)} style={{ flex: 1, padding: 14, background: C.amber, border: 'none', borderRadius: 10, fontSize: 13, fontFamily: MONO, color: C.white, cursor: 'pointer' }}>
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
