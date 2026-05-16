@@ -95,6 +95,7 @@ const BottomNav = ({ tab, setTab }) => (
     {[
       { id: 'clients', label: 'Clients', icon: '◈' },
       { id: 'programs', label: 'Programs', icon: '◇' },
+      { id: 'library', label: 'Library', icon: '⊞' },
       { id: 'progression', label: 'Progress', icon: '↗' },
       { id: 'revenue', label: 'Revenue', icon: '◎' },
     ].map(t => (
@@ -411,6 +412,9 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
           </Card>
         ))}
       </div>
+
+      {/* Health Profile */}
+      <ClientHealthProfile client={client} />
 
       {/* Quick nav buttons */}
       <div style={{ display: 'flex', gap: 8, padding: '10px 16px 0' }}>
@@ -1359,10 +1363,407 @@ export default function App() {
       {tab === 'revenue' && (
         <RevenueTab clients={clients} />
       )}
+      {tab === 'library' && (
+        <ExerciseLibraryTab />
+      )}
 
       {tab !== 'client_detail' && (
         <BottomNav tab={tab === 'clients' ? 'clients' : tab} setTab={navSetTab} />
       )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// EXERCISE LIBRARY TAB
+// ═══════════════════════════════════════════════════════════════════
+function ExerciseLibraryTab() {
+  const [exercises, setExercises] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filterPattern, setFilterPattern] = useState('')
+  const [filterEquip, setFilterEquip] = useState('')
+  const [filterMuscle, setFilterMuscle] = useState('')
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => { loadExercises() }, [])
+
+  const loadExercises = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('exercises').select('*').order('name')
+    setExercises(data || [])
+    setLoading(false)
+  }
+
+  const patterns = [...new Set(exercises.map(e => e.movement_pattern).filter(Boolean))].sort()
+  const equipments = [...new Set(exercises.flatMap(e => e.equipment || []))].sort()
+  const muscles = [...new Set(exercises.flatMap(e => e.primary_muscles || []))].sort()
+
+  const filtered = exercises.filter(e => {
+    const q = search.toLowerCase()
+    const matchSearch = !search || e.name.toLowerCase().includes(q) ||
+      (e.aliases || []).some(a => a.toLowerCase().includes(q)) ||
+      (e.primary_muscles || []).some(m => m.toLowerCase().includes(q))
+    const matchPattern = !filterPattern || e.movement_pattern === filterPattern
+    const matchEquip = !filterEquip || (e.equipment || []).includes(filterEquip)
+    const matchMuscle = !filterMuscle || (e.primary_muscles || []).includes(filterMuscle)
+    return matchSearch && matchPattern && matchEquip && matchMuscle
+  })
+
+  const stressColor = n => n === 1 ? C.sage : n === 2 ? C.amber : '#C0392B'
+  const stressDot = n => (
+    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: stressColor(n), marginRight: 2 }} />
+  )
+  const StressRow = ({ label, val }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: `1px solid ${C.creamDark}30` }}>
+      <Mono style={{ fontSize: 9, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1px' }}>{label}</Mono>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {[1,2,3].map(i => (
+          <div key={i} style={{ width: 10, height: 10, borderRadius: 2, background: i <= val ? stressColor(val) : `${C.creamDark}50` }} />
+        ))}
+        <Mono style={{ fontSize: 9, color: stressColor(val), marginLeft: 4 }}>
+          {val === 1 ? 'Low' : val === 2 ? 'Med' : 'High'}
+        </Mono>
+      </div>
+    </div>
+  )
+
+  if (selected) {
+    const e = selected
+    return (
+      <div style={{ minHeight: '100vh', background: C.creamLight, paddingBottom: 90 }}>
+        <Header title={e.name} subtitle={`${e.movement_pattern || ''} · ${e.category || ''}`} onBack={() => setSelected(null)} />
+        <div style={{ padding: '14px 16px' }}>
+
+          {/* Difficulty + Type badges */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+            {[e.difficulty, e.category, e.movement_pattern].filter(Boolean).map(tag => (
+              <span key={tag} style={{ fontFamily: MONO, fontSize: 8, letterSpacing: '1.5px', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 99, background: `${C.sage}20`, color: C.sageDark, border: `1px solid ${C.sage}40` }}>{tag}</span>
+            ))}
+          </div>
+
+          {/* Muscles */}
+          <Card style={{ marginBottom: 10 }}>
+            <Mono style={{ fontSize: 9, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 8 }}>Muscles</Mono>
+            <div style={{ marginBottom: 6 }}>
+              <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase' }}>Primary</Mono>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 4 }}>
+                {(e.primary_muscles || []).map(m => (
+                  <span key={m} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: C.sage, color: C.white }}>{m.replace(/_/g,' ')}</span>
+                ))}
+              </div>
+            </div>
+            {(e.secondary_muscles || []).length > 0 && (
+              <div>
+                <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase' }}>Secondary</Mono>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 4 }}>
+                  {(e.secondary_muscles || []).map(m => (
+                    <span key={m} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: `${C.sage}25`, color: C.sageDark }}>{m.replace(/_/g,' ')}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+
+          {/* Equipment */}
+          <Card style={{ marginBottom: 10 }}>
+            <Mono style={{ fontSize: 9, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 6 }}>Equipment</Mono>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {(e.equipment || []).map(eq => (
+                <span key={eq} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageDark }}>{eq.replace(/_/g,' ')}</span>
+              ))}
+            </div>
+          </Card>
+
+          {/* Stress Scores */}
+          <Card style={{ marginBottom: 10 }}>
+            <Mono style={{ fontSize: 9, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 8 }}>Joint & Spinal Load</Mono>
+            {[
+              { label: 'Spinal Load', val: e.spinal_load },
+              { label: 'Lower Back', val: e.lower_back_stress },
+              { label: 'Shoulder', val: e.shoulder_stress },
+              { label: 'Knee', val: e.knee_stress },
+              { label: 'Wrist', val: e.wrist_stress },
+              { label: 'Elbow', val: e.elbow_stress },
+              { label: 'Neck', val: e.neck_stress },
+            ].filter(x => x.val).map(x => <StressRow key={x.label} label={x.label} val={x.val} />)}
+          </Card>
+
+          {/* Training Values */}
+          <Card style={{ marginBottom: 10 }}>
+            <Mono style={{ fontSize: 9, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 8 }}>Training Value</Mono>
+            {[
+              { label: 'Hypertrophy', val: e.hypertrophy_value },
+              { label: 'Strength', val: e.strength_value },
+              { label: 'Power', val: e.power_value },
+            ].filter(x => x.val).map(x => <StressRow key={x.label} label={x.label} val={x.val} />)}
+            {e.rehab_suitability && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6 }}>
+                <Mono style={{ fontSize: 9, color: C.sageMid, textTransform: 'uppercase' }}>Rehab Suitability</Mono>
+                <Mono style={{ fontSize: 9, color: e.rehab_suitability === 'high' ? C.sage : e.rehab_suitability === 'contraindicated' ? '#C0392B' : C.amber, textTransform: 'uppercase' }}>{e.rehab_suitability}</Mono>
+              </div>
+            )}
+          </Card>
+
+          {/* Coaching Cues */}
+          {(e.coaching_cues || []).length > 0 && (
+            <Card style={{ marginBottom: 10 }}>
+              <Mono style={{ fontSize: 9, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 8 }}>Coaching Cues</Mono>
+              {(e.coaching_cues || []).map((cue, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <span style={{ color: C.sage, fontSize: 12, marginTop: 1 }}>→</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.sageDark, lineHeight: 1.5 }}>{cue}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* Common Mistakes */}
+          {(e.common_mistakes || []).length > 0 && (
+            <Card style={{ marginBottom: 10 }}>
+              <Mono style={{ fontSize: 9, color: C.amber, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 8 }}>Common Mistakes</Mono>
+              {(e.common_mistakes || []).map((m, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                  <span style={{ color: C.amber, fontSize: 12, marginTop: 1 }}>⚠</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.sageDark, lineHeight: 1.5 }}>{m}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* Contraindications */}
+          {(e.contraindications || []).length > 0 && (
+            <Card style={{ marginBottom: 10, borderLeft: `3px solid #C0392B` }}>
+              <Mono style={{ fontSize: 9, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 8 }}>Contraindications</Mono>
+              {(e.contraindications || []).map((c, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                  <span style={{ color: '#C0392B', fontSize: 10 }}>✕</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.sageDark }}>{c.replace(/_/g,' ')}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* Regressions / Progressions / Substitutions */}
+          {[(e.regressions||[]).length > 0 && { label: 'Regressions', items: e.regressions, color: C.sageMid },
+            (e.progressions||[]).length > 0 && { label: 'Progressions', items: e.progressions, color: C.sage },
+            (e.substitutions||[]).length > 0 && { label: 'Substitutions', items: e.substitutions, color: C.sageMid },
+          ].filter(Boolean).map(section => (
+            <Card key={section.label} style={{ marginBottom: 10 }}>
+              <Mono style={{ fontSize: 9, color: section.color, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 6 }}>{section.label}</Mono>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {section.items.map(item => (
+                  <span key={item} onClick={() => { const ex = exercises.find(e => e.name === item); if(ex) setSelected(ex) }}
+                    style={{ fontFamily: MONO, fontSize: 10, padding: '3px 10px', borderRadius: 99, background: `${C.sage}15`, color: C.sageDark, border: `1px solid ${C.sage}30`, cursor: 'pointer' }}>{item}</span>
+                ))}
+              </div>
+            </Card>
+          ))}
+
+          {/* Best used for / Not ideal for */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            {(e.best_used_for||[]).length > 0 && (
+              <Card style={{ marginBottom: 0 }}>
+                <Mono style={{ fontSize: 8, color: C.sage, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block', marginBottom: 6 }}>Best For</Mono>
+                {(e.best_used_for||[]).map(t => <Mono key={t} style={{ fontSize: 9, color: C.sageDark, display: 'block', marginBottom: 2 }}>· {t.replace(/_/g,' ')}</Mono>)}
+              </Card>
+            )}
+            {(e.not_ideal_for||[]).length > 0 && (
+              <Card style={{ marginBottom: 0 }}>
+                <Mono style={{ fontSize: 8, color: C.amber, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block', marginBottom: 6 }}>Not Ideal For</Mono>
+                {(e.not_ideal_for||[]).map(t => <Mono key={t} style={{ fontSize: 9, color: C.sageDark, display: 'block', marginBottom: 2 }}>· {t.replace(/_/g,' ')}</Mono>)}
+              </Card>
+            )}
+          </div>
+        </div>
+        <BottomNav tab="library" setTab={() => setSelected(null)} />
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.creamLight, paddingBottom: 90 }}>
+      <Header title="Exercise Library" />
+
+      {/* Search */}
+      <div style={{ background: C.sage, padding: '0 16px 12px' }}>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search exercises, muscles..."
+          style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: 'none', background: C.white, fontSize: 13, color: C.sageDark, fontFamily: MONO, outline: 'none' }} />
+      </div>
+
+      {/* Filters */}
+      <div style={{ background: `${C.sage}15`, borderBottom: `1px solid ${C.creamDark}40`, padding: '10px 16px', display: 'flex', gap: 6, overflowX: 'auto' }}>
+        <select value={filterPattern} onChange={e => setFilterPattern(e.target.value)}
+          style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
+          <option value="">All Patterns</option>
+          {patterns.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select value={filterMuscle} onChange={e => setFilterMuscle(e.target.value)}
+          style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
+          <option value="">All Muscles</option>
+          {muscles.map(m => <option key={m} value={m}>{m.replace(/_/g,' ')}</option>)}
+        </select>
+        <select value={filterEquip} onChange={e => setFilterEquip(e.target.value)}
+          style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
+          <option value="">All Equipment</option>
+          {equipments.map(eq => <option key={eq} value={eq}>{eq.replace(/_/g,' ')}</option>)}
+        </select>
+        {(filterPattern || filterMuscle || filterEquip || search) && (
+          <button onClick={() => { setFilterPattern(''); setFilterMuscle(''); setFilterEquip(''); setSearch('') }}
+            style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.amber}`, background: 'none', fontSize: 10, color: C.amber, fontFamily: MONO, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Clear ✕
+          </button>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 16px' }}>
+        <Mono style={{ fontSize: 9, color: C.sageMid, display: 'block', marginBottom: 10, letterSpacing: '1px' }}>
+          {filtered.length} exercise{filtered.length !== 1 ? 's' : ''}
+        </Mono>
+
+        {loading ? <Spinner /> : filtered.map(e => (
+          <div key={e.id} onClick={() => setSelected(e)} style={{
+            background: C.white, borderRadius: 10, padding: '11px 14px', marginBottom: 7,
+            cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.05)',
+            borderLeft: `3px solid ${e.lower_back_stress === 3 ? '#C0392B' : e.lower_back_stress === 2 ? C.amber : C.sage}`,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontFamily: INCISED, fontSize: 13, fontWeight: 600, color: C.sageDark, display: 'block' }}>{e.name}</span>
+                <Mono style={{ fontSize: 9, color: C.sageMid, marginTop: 2 }}>
+                  {(e.primary_muscles || []).slice(0,2).map(m => m.replace(/_/g,' ')).join(' · ')}
+                </Mono>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: `${C.sage}20`, color: C.sage, textTransform: 'uppercase', letterSpacing: '1px' }}>{e.movement_pattern}</Mono>
+                <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1px' }}>{e.difficulty}</Mono>
+              </div>
+            </div>
+            {/* Quick stress indicators */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+              {[{l:'LB', v:e.lower_back_stress},{l:'SH', v:e.shoulder_stress},{l:'KN', v:e.knee_stress}].map(s => s.v && (
+                <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Mono style={{ fontSize: 7, color: C.sageMid }}>{s.l}</Mono>
+                  {[1,2,3].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: 1, background: i <= s.v ? stressColor(s.v) : `${C.creamDark}50` }} />)}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <BottomNav tab="library" setTab={() => {}} />
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CLIENT HEALTH PROFILE (used inside ClientDetail)
+// ═══════════════════════════════════════════════════════════════════
+function ClientHealthProfile({ client }) {
+  const [health, setHealth] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showAdd, setShowAdd] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ category: 'injury', title: '', body_part: '', severity: 'moderate', side: 'n/a', status: 'active', notes: '' })
+  const [toast, setToast] = useState(null)
+
+  const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
+
+  useEffect(() => { loadHealth() }, [client.id])
+
+  const loadHealth = async () => {
+    setLoading(true)
+    const { data } = await supabase.from('client_health').select('*').eq('client_id', client.id).order('created_at', { ascending: false })
+    setHealth(data || [])
+    setLoading(false)
+  }
+
+  const addEntry = async () => {
+    if (!form.title) return
+    setSaving(true)
+    const { error } = await supabase.from('client_health').insert([{ ...form, client_id: client.id }])
+    if (!error) {
+      await loadHealth()
+      setShowAdd(false)
+      setForm({ category: 'injury', title: '', body_part: '', severity: 'moderate', side: 'n/a', status: 'active', notes: '' })
+      showToast('Added ✓')
+    }
+    setSaving(false)
+  }
+
+  const deleteEntry = async (id) => {
+    await supabase.from('client_health').delete().eq('id', id)
+    setHealth(prev => prev.filter(h => h.id !== id))
+  }
+
+  const catColor = cat => ({ injury:'#C0392B', surgery:'#8E44AD', chronic_pain: C.amber, limitation: C.sageMid, posture: C.sage, history: C.sageMid, note: C.sage }[cat] || C.sageMid)
+  const catIcon = cat => ({ injury:'⚡', surgery:'✦', chronic_pain:'⚠', limitation:'◈', posture:'↑', history:'◷', note:'✎' }[cat] || '·')
+
+  return (
+    <div style={{ padding: '12px 16px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <Mono style={{ fontSize: 9, letterSpacing: '2px', color: C.sageMid, textTransform: 'uppercase' }}>Health Profile</Mono>
+        <button onClick={() => setShowAdd(true)} style={{ background: 'none', border: `1px solid ${C.sage}`, borderRadius: 7, padding: '3px 10px', fontSize: 9, color: C.sage, fontFamily: MONO, cursor: 'pointer' }}>+ Add</button>
+      </div>
+
+      {loading ? <Spinner /> : health.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '16px 0', marginBottom: 10 }}>
+          <Mono style={{ fontSize: 11, color: C.sageMid }}>No health data yet — tap + Add</Mono>
+        </div>
+      ) : health.map(h => (
+        <div key={h.id} style={{
+          background: C.white, borderRadius: 10, padding: '10px 12px', marginBottom: 7,
+          borderLeft: `3px solid ${catColor(h.category)}`,
+          boxShadow: '0 1px 3px rgba(0,0,0,.05)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <span style={{ fontSize: 12, color: catColor(h.category) }}>{catIcon(h.category)}</span>
+                <span style={{ fontFamily: INCISED, fontSize: 12, fontWeight: 600, color: C.sageDark }}>{h.title}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {h.body_part && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase' }}>{h.body_part.replace(/_/g,' ')}</Mono>}
+                {h.severity && h.severity !== 'n/a' && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: h.severity === 'severe' ? '#C0392B20' : h.severity === 'resolved' ? `${C.sage}20` : `${C.amber}20`, color: h.severity === 'severe' ? '#C0392B' : h.severity === 'resolved' ? C.sage : C.amber, textTransform: 'uppercase' }}>{h.severity}</Mono>}
+                {h.side && h.side !== 'n/a' && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase' }}>{h.side}</Mono>}
+                <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: h.status === 'active' ? `${C.amber}20` : `${C.sage}20`, color: h.status === 'active' ? C.amber : C.sage, textTransform: 'uppercase' }}>{h.status}</Mono>
+              </div>
+              {h.notes && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 4, display: 'block' }}>{h.notes}</Mono>}
+            </div>
+            <button onClick={() => deleteEntry(h.id)} style={{ background: 'none', border: 'none', color: `${C.sageMid}60`, fontSize: 14, cursor: 'pointer', padding: '0 0 0 8px' }}>✕</button>
+          </div>
+        </div>
+      ))}
+
+      {showAdd && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: C.creamLight, borderRadius: '16px 16px 0 0', padding: '24px 20px 40px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontFamily: IMPACT, fontSize: 18, letterSpacing: '1px', color: C.sageDark, textTransform: 'uppercase' }}>Add Health Entry</h2>
+              <button onClick={() => setShowAdd(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: C.sageMid, cursor: 'pointer' }}>✕</button>
+            </div>
+            <Select label="Category" value={form.category} onChange={v => setForm(p => ({...p, category: v}))}
+              options={[{value:'injury',label:'⚡ Injury'},{value:'surgery',label:'✦ Surgery'},{value:'chronic_pain',label:'⚠ Chronic Pain'},{value:'limitation',label:'◈ Limitation'},{value:'posture',label:'↑ Posture Note'},{value:'history',label:'◷ Training History'},{value:'note',label:'✎ General Note'}]} />
+            <Input label="Title" value={form.title} onChange={v => setForm(p=>({...p,title:v}))} placeholder="e.g. Lower Back Pain, ACL Surgery" />
+            <Select label="Body Part" value={form.body_part} onChange={v => setForm(p=>({...p,body_part:v}))}
+              options={[{value:'',label:'Select...'},{value:'lower_back',label:'Lower Back'},{value:'shoulder',label:'Shoulder'},{value:'knee',label:'Knee'},{value:'neck',label:'Neck'},{value:'wrist',label:'Wrist'},{value:'elbow',label:'Elbow'},{value:'hip',label:'Hip'},{value:'ankle',label:'Ankle'},{value:'core',label:'Core / Abdomen'},{value:'full_body',label:'Full Body'}]} />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Select label="Severity" value={form.severity} onChange={v => setForm(p=>({...p,severity:v}))}
+                options={[{value:'mild',label:'Mild'},{value:'moderate',label:'Moderate'},{value:'severe',label:'Severe'},{value:'resolved',label:'Resolved'},{value:'n/a',label:'N/A'}]} />
+              <Select label="Side" value={form.side} onChange={v => setForm(p=>({...p,side:v}))}
+                options={[{value:'n/a',label:'N/A'},{value:'left',label:'Left'},{value:'right',label:'Right'},{value:'bilateral',label:'Both'}]} />
+            </div>
+            <Select label="Status" value={form.status} onChange={v => setForm(p=>({...p,status:v}))}
+              options={[{value:'active',label:'Active'},{value:'managing',label:'Managing'},{value:'resolved',label:'Resolved'}]} />
+            <Input label="Notes" value={form.notes} onChange={v => setForm(p=>({...p,notes:v}))} placeholder="Any additional context..." />
+            <button onClick={addEntry} disabled={saving} style={{ width: '100%', padding: 14, background: C.sage, color: C.white, border: 'none', borderRadius: 12, fontSize: 12, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 8 }}>
+              {saving ? 'Saving...' : 'Save Entry'}
+            </button>
+          </div>
+        </div>
+      )}
+      {toast && <Toast msg={toast} />}
     </div>
   )
 }
