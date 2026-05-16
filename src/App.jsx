@@ -14,6 +14,15 @@ const IMPACT = "Impact, 'Arial Narrow', sans-serif"
 const INCISED = "'Trebuchet MS', 'DM Sans', sans-serif"
 const SERIF = "'Libre Baskerville', Georgia, serif"
 
+// ─── Chevron component (your brand arrows) ─────────────────────────────────
+const Chevron = ({ open = false, size = 14, color = '#8CA199' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{
+    transition: 'transform .25s ease', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0,
+  }}>
+    <path d="M9 6l6 6-6 6" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 const fmt = n => `AED ${Number(n || 0).toLocaleString()}`
 const today = () => new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -89,6 +98,51 @@ const Header = ({ title, subtitle, onBack, right }) => (
     </div>
   </div>
 )
+
+// ─── ExerciseIntel ─────────────────────────────────────────────────────────
+const ExerciseIntel = ({ ex, color }) => {
+  if (!ex) return null
+  const stressItems = [
+    { label: 'Lower Back', val: ex.lower_back_stress },
+    { label: 'Shoulder', val: ex.shoulder_stress },
+    { label: 'Knee', val: ex.knee_stress },
+    { label: 'Wrist', val: ex.wrist_stress },
+    { label: 'Neck', val: ex.neck_stress },
+    { label: 'Elbow', val: ex.elbow_stress },
+  ].filter(s => s.val)
+  const stressColor = v => v === 1 ? '#8CA199' : v === 2 ? '#B8732A' : '#C0392B'
+  return (
+    <div style={{ background: `${color}10`, borderTop: `1px solid ${color}30`, padding: '10px 14px 12px' }}>
+      <div style={{ fontFamily: MONO, fontSize: 8, color: color, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 6 }}>Exercise Intelligence</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+        {ex.movement_pattern && <span style={{ fontFamily: MONO, fontSize: 8, padding: '2px 7px', borderRadius: 99, background: color, color: '#FFF', textTransform: 'uppercase', letterSpacing: '1px' }}>{ex.movement_pattern}</span>}
+        {(ex.primary_muscles || []).slice(0, 4).map(m => (
+          <span key={m} style={{ fontFamily: MONO, fontSize: 8, padding: '2px 7px', borderRadius: 99, background: '#FFF', color: C.sageDark, border: `1px solid ${color}40` }}>{m.replace(/_/g, ' ')}</span>
+        ))}
+      </div>
+      {stressItems.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+          {stressItems.map(s => (
+            <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ fontFamily: MONO, fontSize: 8, color: C.sageMid }}>{s.label}</span>
+              <div style={{ display: 'flex', gap: 1.5 }}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} style={{ width: 6, height: 6, borderRadius: 1, background: i <= s.val ? stressColor(s.val) : `${C.creamDark}50` }} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {(ex.contraindications || []).length > 0 && (
+        <div style={{ marginTop: 8, padding: '6px 8px', background: '#C0392B15', borderRadius: 6, borderLeft: '2px solid #C0392B' }}>
+          <span style={{ fontFamily: MONO, fontSize: 8, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '1px', display: 'block' }}>Caution</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: C.sageDark }}>{(ex.contraindications || []).map(c => c.replace(/_/g, ' ')).join(' · ')}</span>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const BottomNav = ({ tab, setTab }) => (
   <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: C.sage, display: 'flex', borderTop: `1px solid ${C.sageLight}60`, paddingBottom: 'env(safe-area-inset-bottom, 12px)', zIndex: 50 }}>
@@ -415,6 +469,8 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
 
       {/* Health Profile */}
       <ClientHealthProfile client={client} />
+      {/* Equipment Profile */}
+      <ClientEquipmentProfile client={client} setClients={setClients} />
 
       {/* Quick nav buttons */}
       <div style={{ display: 'flex', gap: 8, padding: '10px 16px 0' }}>
@@ -573,8 +629,21 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
   const [showAddDay, setShowAddDay] = useState(false)
   const [saving, setSaving] = useState(false)
   const [runLogs, setRunLogs] = useState({}) // blockId -> { actual_weight, actual_reps, notes }
+  const [expandedGroups, setExpandedGroups] = useState(new Set())
+  const [expandedBlocks, setExpandedBlocks] = useState(new Set())
+  const [exerciseLib, setExerciseLib] = useState({})
+  const toggleGroup = key => setExpandedGroups(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  const toggleBlockExpand = id => setExpandedBlocks(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   const [clientFilter2, setClientFilter2] = useState('')
   const [confirmDeleteProgram, setConfirmDeleteProgram] = useState(null)
+  const [expandedClients, setExpandedClients] = useState(new Set())
+  const toggleClient = (name) => {
+    setExpandedClients(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name); else next.add(name)
+      return next
+    })
+  }
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
@@ -591,6 +660,51 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
     const { data } = await query
     setPrograms(data || [])
     setLoading(false)
+  }
+
+  // Load exercise library lookup once
+  useEffect(() => {
+    supabase.from('exercises').select('name, primary_muscles, secondary_muscles, movement_pattern, equipment, lower_back_stress, shoulder_stress, knee_stress, wrist_stress, neck_stress, elbow_stress, spinal_load, contraindications, best_used_for').then(({ data }) => {
+      const lib = {}
+      ;(data || []).forEach(e => { lib[e.name.toLowerCase()] = e })
+      setExerciseLib(lib)
+    })
+  }, [])
+
+  // Match an exercise block to library entry (fuzzy lookup)
+  const findEx = (name) => {
+    if (!name) return null
+    const key = name.toLowerCase().trim()
+    if (exerciseLib[key]) return exerciseLib[key]
+    // Try common variations
+    const stripped = key.replace(/\s+(machine|smith)$/, '').replace(/\(.*\)/g, '').trim()
+    if (exerciseLib[stripped]) return exerciseLib[stripped]
+    // Try contains match
+    const keys = Object.keys(exerciseLib)
+    const partial = keys.find(k => k.includes(key) || key.includes(k))
+    return partial ? exerciseLib[partial] : null
+  }
+
+  // Compute risk flags for a day based on all blocks
+  const dayRiskFlags = (blocks) => {
+    const flags = []
+    let lbHigh = 0, shHigh = 0, kneeHigh = 0
+    const patterns = {}
+    blocks.forEach(b => {
+      const ex = findEx(b.exercise_name)
+      if (!ex) return
+      if (ex.lower_back_stress === 3) lbHigh++
+      if (ex.shoulder_stress === 3) shHigh++
+      if (ex.knee_stress === 3) kneeHigh++
+      if (ex.movement_pattern) patterns[ex.movement_pattern] = (patterns[ex.movement_pattern] || 0) + 1
+    })
+    if (lbHigh >= 2) flags.push({ level: 'warning', text: `${lbHigh} exercises with high lower back load — consider redistribution` })
+    if (shHigh >= 2) flags.push({ level: 'warning', text: `${shHigh} exercises with high shoulder stress in same session` })
+    if (kneeHigh >= 2) flags.push({ level: 'warning', text: `${kneeHigh} exercises with high knee stress — monitor closely` })
+    Object.entries(patterns).forEach(([p, count]) => {
+      if (count >= 4) flags.push({ level: 'info', text: `${count} ${p} exercises — high movement redundancy` })
+    })
+    return flags
   }
 
   const loadProgramDays = async (programId) => {
@@ -750,10 +864,27 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
 
           {activeDay && (
             <>
-              <Card style={{ borderLeft: `3px solid ${C.sage}`, marginBottom: 12 }}>
+              <Card style={{ borderLeft: `3px solid ${C.sage}`, marginBottom: 10 }}>
                 <Mono style={{ fontSize: 10, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 3 }}>{activeDay.name}</Mono>
                 <span style={{ fontSize: 16, color: C.sageDark, fontFamily: SERIF }}>{activeDay.theme}</span>
               </Card>
+
+              {/* Risk Flags */}
+              {(() => {
+                const flags = dayRiskFlags(dayBlocks)
+                if (flags.length === 0) return null
+                return (
+                  <div style={{ marginBottom: 12 }}>
+                    <Mono style={{ fontSize: 9, color: C.amber, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 6 }}>⚠ Coach AI — Day Analysis</Mono>
+                    {flags.map((f, i) => (
+                      <div key={i} style={{ background: f.level === 'warning' ? `${C.amber}15` : `${C.sage}15`, border: `1px solid ${f.level === 'warning' ? C.amber : C.sage}40`, borderRadius: 8, padding: '8px 10px', marginBottom: 5, display: 'flex', gap: 8 }}>
+                        <span style={{ fontSize: 12, color: f.level === 'warning' ? C.amber : C.sage }}>{f.level === 'warning' ? '⚠' : 'ⓘ'}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 10, color: C.sageDark, lineHeight: 1.4 }}>{f.text}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
 
               {(() => {
                 // Group consecutive blocks that share the same block_type (non-single) and letter prefix
@@ -790,46 +921,17 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
                 return groups.map((g, gi) => {
                   if (g.type === 'single') {
                     const b = g.block
+                    const ex = findEx(b.exercise_name)
+                    const isExpanded = expandedBlocks.has(b.id)
                     return (
-                      <Card key={b.id} style={{ marginBottom: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                          <span style={{ fontSize: 15, color: C.sageDark, fontFamily: SERIF, flex: 1 }}>{b.exercise_name}</span>
-                          <Mono style={{ fontSize: 9, background: `${C.sage}20`, padding: '2px 8px', borderRadius: 99, color: C.sageDark, textTransform: 'uppercase', letterSpacing: '1px' }}>single</Mono>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                          {[{ l: 'Sets', v: b.sets }, { l: 'Reps', v: b.reps }, { l: 'Weight', v: b.weight }].map(x => (
-                            <div key={x.l}>
-                              <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block' }}>{x.l}</Mono>
-                              <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF }}>{x.v || '—'}</span>
+                      <div key={b.id} style={{ background: C.white, borderRadius: 10, marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.05)' }}>
+                        <div onClick={() => ex && toggleBlockExpand(b.id)} style={{ padding: '12px 14px', cursor: ex ? 'pointer' : 'default' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                              {ex && <Chevron open={isExpanded} size={10} color={C.sage} />}
+                              <span style={{ fontSize: 14, color: C.sageDark, fontFamily: SERIF }}>{b.exercise_name}</span>
                             </div>
-                          ))}
-                        </div>
-                        {b.focus && <Mono style={{ fontSize: 10, color: C.sage, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
-                        {b.notes && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 3, display: 'block' }}>{b.notes}</Mono>}
-                      </Card>
-                    )
-                  }
-
-                  // Grouped block (superset / triset / complex)
-                  const color = blockTypeColor[g.blockType] || C.sage
-                  const bg = blockTypeBg[g.blockType] || `${C.sage}15`
-                  return (
-                    <div key={gi} style={{ marginBottom: 14, borderRadius: 12, overflow: 'hidden', border: `2px solid ${color}40` }}>
-                      {/* Group header */}
-                      <div style={{ background: color, padding: '7px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontFamily: IMPACT, fontSize: 13, color: C.white, letterSpacing: '2px', textTransform: 'uppercase' }}>{g.blockType.toUpperCase()}</span>
-                        <span style={{ fontFamily: MONO, fontSize: 9, color: `${C.white}80`, letterSpacing: '2px' }}>Block {g.letter} · {g.blocks.length} exercises</span>
-                      </div>
-                      {/* Exercises */}
-                      {g.blocks.map((b, bi) => (
-                        <div key={b.id} style={{
-                          padding: '12px 14px',
-                          background: bi % 2 === 0 ? C.white : `${color}08`,
-                          borderTop: bi > 0 ? `1px dashed ${color}30` : 'none',
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <span style={{ fontSize: 15, color: C.sageDark, fontFamily: SERIF, flex: 1 }}>{b.exercise_name}</span>
-                            <Mono style={{ fontSize: 9, color: color, letterSpacing: '1px' }}>{b.notes?.split(' - ')[0] || ''}</Mono>
+                            <Mono style={{ fontSize: 9, background: `${C.sage}20`, padding: '2px 8px', borderRadius: 99, color: C.sageDark, textTransform: 'uppercase', letterSpacing: '1px' }}>single</Mono>
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                             {[{ l: 'Sets', v: b.sets }, { l: 'Reps', v: b.reps }, { l: 'Weight', v: b.weight }].map(x => (
@@ -839,10 +941,58 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
                               </div>
                             ))}
                           </div>
-                          {b.focus && <Mono style={{ fontSize: 10, color: color, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
-                          {b.notes && b.notes.includes(' - ') && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 2, display: 'block' }}>{b.notes.split(' - ').slice(1).join(' - ')}</Mono>}
+                          {b.focus && <Mono style={{ fontSize: 10, color: C.sage, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
+                          {b.notes && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 3, display: 'block' }}>{b.notes}</Mono>}
                         </div>
-                      ))}
+                        {isExpanded && ex && <ExerciseIntel ex={ex} color={C.sage} />}
+                      </div>
+                    )
+                  }
+
+                  // Grouped block (superset / triset / complex)
+                  const color = blockTypeColor[g.blockType] || C.sage
+                  const groupKey = `${g.letter}-${gi}`
+                  const groupOpen = expandedGroups.has(groupKey) || expandedGroups.size === 0
+                  return (
+                    <div key={gi} style={{ marginBottom: 10, borderRadius: 12, overflow: 'hidden', border: `2px solid ${color}40` }}>
+                      {/* Group header - clickable */}
+                      <div onClick={() => toggleGroup(groupKey)} style={{ background: color, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                        <Chevron open={groupOpen} size={12} color={C.white} />
+                        <span style={{ fontFamily: IMPACT, fontSize: 13, color: C.white, letterSpacing: '2px', textTransform: 'uppercase' }}>{g.blockType.toUpperCase()}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 9, color: `${C.white}90`, letterSpacing: '2px' }}>Block {g.letter} · {g.blocks.length} ex</span>
+                      </div>
+                      {/* Exercises */}
+                      {groupOpen && g.blocks.map((b, bi) => {
+                        const ex = findEx(b.exercise_name)
+                        const isExpanded = expandedBlocks.has(b.id)
+                        return (
+                        <div key={b.id} style={{
+                          background: bi % 2 === 0 ? C.white : `${color}08`,
+                          borderTop: bi > 0 ? `1px dashed ${color}30` : 'none',
+                        }}>
+                          <div onClick={() => ex && toggleBlockExpand(b.id)} style={{ padding: '12px 14px', cursor: ex ? 'pointer' : 'default' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                                {ex && <Chevron open={isExpanded} size={10} color={color} />}
+                                <span style={{ fontSize: 14, color: C.sageDark, fontFamily: SERIF }}>{b.exercise_name}</span>
+                              </div>
+                              <Mono style={{ fontSize: 9, color: color, letterSpacing: '1px' }}>{b.notes?.split(' - ')[0] || ''}</Mono>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                              {[{ l: 'Sets', v: b.sets }, { l: 'Reps', v: b.reps }, { l: 'Weight', v: b.weight }].map(x => (
+                                <div key={x.l}>
+                                  <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block' }}>{x.l}</Mono>
+                                  <span style={{ fontSize: 13, color: C.sageDark, fontFamily: SERIF }}>{x.v || '—'}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {b.focus && <Mono style={{ fontSize: 10, color: color, marginTop: 6, display: 'block' }}>Focus: {b.focus}</Mono>}
+                            {b.notes && b.notes.includes(' - ') && <Mono style={{ fontSize: 10, color: C.sageMid, marginTop: 2, display: 'block' }}>{b.notes.split(' - ').slice(1).join(' - ')}</Mono>}
+                          </div>
+                          {/* Exercise Intelligence - shown when expanded */}
+                          {isExpanded && ex && <ExerciseIntel ex={ex} color={color} />}
+                        </div>
+                      )})}
                     </div>
                   )
                 })
@@ -1000,15 +1150,19 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
           <div style={{ textAlign: 'center', padding: 40 }}>
             <p style={{ fontFamily: MONO, color: C.sageMid, fontSize: 12 }}>No programs yet.</p>
           </div>
-        ) : Object.entries(grouped).map(([clientName, progs]) => (
-          <div key={clientName} style={{ marginBottom: 20 }}>
-            {/* Client section header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, paddingLeft: 2 }}>
-              <span style={{ fontFamily: IMPACT, fontSize: 13, letterSpacing: '2px', color: C.sage, textTransform: 'uppercase' }}>{clientName}</span>
-              <div style={{ flex: 1, height: 1, background: `${C.sage}30` }} />
-              <Mono style={{ fontSize: 9, color: C.sageMid }}>{progs.length} program{progs.length !== 1 ? 's' : ''}</Mono>
+        ) : Object.entries(grouped).map(([clientName, progs]) => {
+          const isOpen = expandedClients.has(clientName) || clientFilter2 !== ''
+          const activeCount = progs.filter(p => p.is_active).length
+          return (
+          <div key={clientName} style={{ marginBottom: 14 }}>
+            {/* Client section header - now clickable to expand */}
+            <div onClick={() => toggleClient(clientName)} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: isOpen ? 8 : 0, padding: '10px 12px', background: C.white, borderRadius: 10, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,.04)', borderLeft: `3px solid ${activeCount > 0 ? C.sage : C.creamDark}` }}>
+              <Chevron open={isOpen} size={14} color={C.sage} />
+              <span style={{ fontFamily: IMPACT, fontSize: 14, letterSpacing: '2px', color: C.sageDark, textTransform: 'uppercase', flex: 1 }}>{clientName}</span>
+              {activeCount > 0 && <Mono style={{ fontSize: 8, padding: '2px 7px', borderRadius: 99, background: `${C.sage}20`, color: C.sage, textTransform: 'uppercase', letterSpacing: '1.5px' }}>{activeCount} active</Mono>}
+              <Mono style={{ fontSize: 9, color: C.sageMid }}>{progs.length} prog{progs.length !== 1 ? 's' : ''}</Mono>
             </div>
-            {progs.map(p => (
+            {isOpen && progs.map(p => (
               <div key={p.id} style={{
                 background: C.white, borderRadius: 10, marginBottom: 7,
                 borderLeft: `3px solid ${p.is_active ? C.sage : C.creamDark}`,
@@ -1036,7 +1190,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
               </div>
             ))}
           </div>
-        ))}
+        )})}
       </div>
 
       {/* Confirm Delete Program Modal */}
@@ -1767,6 +1921,72 @@ function ClientHealthProfile({ client }) {
               {saving ? 'Saving...' : 'Save Entry'}
             </button>
           </div>
+        </div>
+      )}
+      {toast && <Toast msg={toast} />}
+    </div>
+  )
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// CLIENT EQUIPMENT PROFILE (machines/equipment available to client)
+// ═══════════════════════════════════════════════════════════════════
+function ClientEquipmentProfile({ client, setClients }) {
+  const [equipment, setEquipment] = useState(client.equipment || [])
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+  const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
+
+  const allEquipment = [
+    'bodyweight', 'dumbbell', 'kettlebell', 'barbell', 'smith_machine',
+    'cable_machine', 'machine', 'bench', 'box', 'pull_up_bar', 'trx',
+    'band', 'foam_roller', 'plate', 'medicine_ball', 'swiss_ball',
+    'treadmill', 'airbike', 'rowing_machine', 'ski_erg',
+    'landmine', 'squat_rack', 'leg_press_machine', 'wall'
+  ]
+
+  const toggle = (eq) => {
+    setEquipment(prev => prev.includes(eq) ? prev.filter(x => x !== eq) : [...prev, eq])
+  }
+
+  const save = async () => {
+    setSaving(true)
+    const { error } = await supabase.from('clients').update({ equipment }).eq('id', client.id)
+    if (!error) {
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, equipment } : c))
+      showToast('Equipment saved ✓')
+      setOpen(false)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ padding: '8px 16px 0' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: C.white, borderRadius: 10, cursor: 'pointer', borderLeft: `3px solid ${C.sage}`, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Chevron open={open} size={12} color={C.sage} />
+          <Mono style={{ fontSize: 10, letterSpacing: '2px', color: C.sageDark, textTransform: 'uppercase' }}>Equipment Profile</Mono>
+        </div>
+        <Mono style={{ fontSize: 9, color: C.sageMid }}>{equipment.length} item{equipment.length !== 1 ? 's' : ''}</Mono>
+      </div>
+      {open && (
+        <div style={{ padding: '10px 0' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {allEquipment.map(eq => (
+              <button key={eq} onClick={() => toggle(eq)} style={{
+                padding: '5px 10px', borderRadius: 99, border: '1px solid', cursor: 'pointer',
+                borderColor: equipment.includes(eq) ? C.sage : C.creamDark,
+                background: equipment.includes(eq) ? C.sage : 'transparent',
+                color: equipment.includes(eq) ? C.white : C.sageMid,
+                fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase', fontFamily: MONO,
+              }}>{eq.replace(/_/g, ' ')}</button>
+            ))}
+          </div>
+          <button onClick={save} disabled={saving} style={{ width: '100%', padding: 10, background: C.sage, color: C.white, border: 'none', borderRadius: 8, fontSize: 11, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 10 }}>
+            {saving ? 'Saving...' : 'Save Equipment'}
+          </button>
         </div>
       )}
       {toast && <Toast msg={toast} />}
