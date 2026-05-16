@@ -629,16 +629,27 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
   const [showAddDay, setShowAddDay] = useState(false)
   const [saving, setSaving] = useState(false)
   const [runLogs, setRunLogs] = useState({}) // blockId -> { actual_weight, actual_reps, notes }
-  const [expandedGroups, setExpandedGroups] = useState(new Set())
+  // Groups (supersets/trisets) — default OPEN. collapsedGroups = explicitly closed keys
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set())
   const [expandedBlocks, setExpandedBlocks] = useState(new Set())
   const [exerciseLib, setExerciseLib] = useState({})
-  const toggleGroup = key => setExpandedGroups(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  const toggleGroup = key => setCollapsedGroups(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   const toggleBlockExpand = id => setExpandedBlocks(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  // Reset collapsed state when changing day
+  useEffect(() => { setCollapsedGroups(new Set()); setExpandedBlocks(new Set()) }, [activeDay?.id])
   const [clientFilter2, setClientFilter2] = useState('')
   const [confirmDeleteProgram, setConfirmDeleteProgram] = useState(null)
-  const [expandedClients, setExpandedClients] = useState(new Set())
+  // Track which clients are EXPLICITLY collapsed (default: all collapsed)
+  const [collapsedClients, setCollapsedClients] = useState('default-all-collapsed')
+  const isClientOpen = (name) => collapsedClients !== 'default-all-collapsed' && !collapsedClients.has(name)
   const toggleClient = (name) => {
-    setExpandedClients(prev => {
+    setCollapsedClients(prev => {
+      if (prev === 'default-all-collapsed') {
+        // First click: open this one, keep others closed
+        const all = new Set(Object.keys(grouped))
+        all.delete(name)
+        return all
+      }
       const next = new Set(prev)
       if (next.has(name)) next.delete(name); else next.add(name)
       return next
@@ -951,8 +962,8 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
 
                   // Grouped block (superset / triset / complex)
                   const color = blockTypeColor[g.blockType] || C.sage
-                  const groupKey = `${g.letter}-${gi}`
-                  const groupOpen = expandedGroups.has(groupKey) || expandedGroups.size === 0
+                  const groupKey = `group-${gi}`
+                  const groupOpen = !collapsedGroups.has(groupKey)
                   return (
                     <div key={gi} style={{ marginBottom: 10, borderRadius: 12, overflow: 'hidden', border: `2px solid ${color}40` }}>
                       {/* Group header - clickable */}
@@ -1151,7 +1162,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
             <p style={{ fontFamily: MONO, color: C.sageMid, fontSize: 12 }}>No programs yet.</p>
           </div>
         ) : Object.entries(grouped).map(([clientName, progs]) => {
-          const isOpen = expandedClients.has(clientName) || clientFilter2 !== ''
+          const isOpen = isClientOpen(clientName) || clientFilter2 !== ''
           const activeCount = progs.filter(p => p.is_active).length
           return (
           <div key={clientName} style={{ marginBottom: 14 }}>
@@ -1930,25 +1941,30 @@ function ClientHealthProfile({ client }) {
 
 
 // ═══════════════════════════════════════════════════════════════════
-// CLIENT EQUIPMENT PROFILE (machines/equipment available to client)
+// CLIENT EQUIPMENT PROFILE — dynamic library + custom equipment
 // ═══════════════════════════════════════════════════════════════════
 function ClientEquipmentProfile({ client, setClients }) {
   const [equipment, setEquipment] = useState(client.equipment || [])
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
+  const [library, setLibrary] = useState([])
+  const [search, setSearch] = useState('')
+  const [showAddCustom, setShowAddCustom] = useState(false)
+  const [customForm, setCustomForm] = useState({ name: '', category: 'custom', description: '' })
+
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
-  const allEquipment = [
-    'bodyweight', 'dumbbell', 'kettlebell', 'barbell', 'smith_machine',
-    'cable_machine', 'machine', 'bench', 'box', 'pull_up_bar', 'trx',
-    'band', 'foam_roller', 'plate', 'medicine_ball', 'swiss_ball',
-    'treadmill', 'airbike', 'rowing_machine', 'ski_erg',
-    'landmine', 'squat_rack', 'leg_press_machine', 'wall'
-  ]
+  useEffect(() => { loadLibrary() }, [])
+  useEffect(() => { setEquipment(client.equipment || []) }, [client.id])
 
-  const toggle = (eq) => {
-    setEquipment(prev => prev.includes(eq) ? prev.filter(x => x !== eq) : [...prev, eq])
+  const loadLibrary = async () => {
+    const { data } = await supabase.from('equipment_library').select('*').order('category').order('name')
+    setLibrary(data || [])
+  }
+
+  const toggle = (name) => {
+    setEquipment(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name])
   }
 
   const save = async () => {
@@ -1962,6 +1978,37 @@ function ClientEquipmentProfile({ client, setClients }) {
     setSaving(false)
   }
 
+  const addCustom = async () => {
+    if (!customForm.name.trim()) return
+    const { data, error } = await supabase.from('equipment_library').insert([{
+      name: customForm.name.trim(),
+      category: customForm.category,
+      description: customForm.description || null,
+      is_custom: true,
+    }]).select()
+    if (!error && data) {
+      setLibrary(prev => [...prev, data[0]])
+      // Auto-attach to current client
+      setEquipment(prev => [...prev, data[0].name])
+      setShowAddCustom(false)
+      setCustomForm({ name: '', category: 'custom', description: '' })
+      showToast(`Added "${data[0].name}" to library ✓`)
+    } else if (error?.code === '23505') {
+      showToast('Equipment with this name already exists')
+    }
+  }
+
+  // Group library by category for cleaner display
+  const groupedLib = {}
+  library
+    .filter(eq => !search || eq.name.toLowerCase().includes(search.toLowerCase()) || eq.category.toLowerCase().includes(search.toLowerCase()))
+    .forEach(eq => {
+      if (!groupedLib[eq.category]) groupedLib[eq.category] = []
+      groupedLib[eq.category].push(eq)
+    })
+
+  const catLabel = { free_weights: 'Free Weights', machines: 'Machines', cables: 'Cables', bodyweight: 'Bodyweight & Rigs', bands: 'Bands', cardio: 'Cardio', functional: 'Functional', accessories: 'Accessories', recovery: 'Recovery', rehab: 'Rehab', custom: 'Custom' }
+
   return (
     <div style={{ padding: '8px 16px 0' }}>
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: C.white, borderRadius: 10, cursor: 'pointer', borderLeft: `3px solid ${C.sage}`, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
@@ -1973,22 +2020,69 @@ function ClientEquipmentProfile({ client, setClients }) {
       </div>
       {open && (
         <div style={{ padding: '10px 0' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            {allEquipment.map(eq => (
-              <button key={eq} onClick={() => toggle(eq)} style={{
-                padding: '5px 10px', borderRadius: 99, border: '1px solid', cursor: 'pointer',
-                borderColor: equipment.includes(eq) ? C.sage : C.creamDark,
-                background: equipment.includes(eq) ? C.sage : 'transparent',
-                color: equipment.includes(eq) ? C.white : C.sageMid,
-                fontSize: 9, letterSpacing: '1px', textTransform: 'uppercase', fontFamily: MONO,
-              }}>{eq.replace(/_/g, ' ')}</button>
-            ))}
+          {/* Search bar + add custom */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search equipment..."
+              style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, fontFamily: MONO, fontSize: 11, color: C.sageDark, outline: 'none', background: C.white }} />
+            <button onClick={() => setShowAddCustom(true)} style={{ padding: '6px 12px', background: C.sage, border: 'none', borderRadius: 8, color: C.white, fontSize: 10, fontFamily: MONO, letterSpacing: '1px', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Custom</button>
           </div>
-          <button onClick={save} disabled={saving} style={{ width: '100%', padding: 10, background: C.sage, color: C.white, border: 'none', borderRadius: 8, fontSize: 11, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 10 }}>
-            {saving ? 'Saving...' : 'Save Equipment'}
+
+          {/* Equipment by category */}
+          {Object.entries(groupedLib).map(([cat, items]) => (
+            <div key={cat} style={{ marginBottom: 10 }}>
+              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.sageMid, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{catLabel[cat] || cat}</Mono>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {items.map(eq => (
+                  <button key={eq.id} onClick={() => toggle(eq.name)} style={{
+                    padding: '5px 10px', borderRadius: 99, border: '1px solid', cursor: 'pointer',
+                    borderColor: equipment.includes(eq.name) ? C.sage : C.creamDark,
+                    background: equipment.includes(eq.name) ? C.sage : 'transparent',
+                    color: equipment.includes(eq.name) ? C.white : C.sageMid,
+                    fontSize: 9, letterSpacing: '0.5px', fontFamily: MONO,
+                  }}>{eq.name}{eq.is_custom && ' ★'}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <button onClick={save} disabled={saving} style={{ width: '100%', padding: 11, background: C.sage, color: C.white, border: 'none', borderRadius: 8, fontSize: 11, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 10 }}>
+            {saving ? 'Saving...' : 'Save Equipment Profile'}
           </button>
         </div>
       )}
+
+      {/* Add Custom Equipment Modal */}
+      {showAddCustom && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }}>
+          <div style={{ background: C.creamLight, borderRadius: '16px 16px 0 0', padding: '24px 20px 40px', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h2 style={{ fontFamily: IMPACT, fontSize: 18, letterSpacing: '1px', color: C.sageDark, textTransform: 'uppercase' }}>Add Custom Equipment</h2>
+              <button onClick={() => setShowAddCustom(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: C.sageMid, cursor: 'pointer' }}>✕</button>
+            </div>
+            <Input label="Equipment Name" value={customForm.name} onChange={v => setCustomForm(p => ({ ...p, name: v }))} placeholder="e.g. Vibration Plate, Reformer, etc." />
+            <Select label="Category" value={customForm.category} onChange={v => setCustomForm(p => ({ ...p, category: v }))}
+              options={[
+                { value: 'custom', label: 'Custom' },
+                { value: 'free_weights', label: 'Free Weights' },
+                { value: 'machines', label: 'Machines' },
+                { value: 'cables', label: 'Cables' },
+                { value: 'bodyweight', label: 'Bodyweight / Rigs' },
+                { value: 'bands', label: 'Bands' },
+                { value: 'cardio', label: 'Cardio' },
+                { value: 'functional', label: 'Functional' },
+                { value: 'accessories', label: 'Accessories' },
+                { value: 'recovery', label: 'Recovery' },
+                { value: 'rehab', label: 'Rehab' },
+              ]} />
+            <Input label="Description (optional)" value={customForm.description} onChange={v => setCustomForm(p => ({ ...p, description: v }))} placeholder="What is this used for?" />
+            <button onClick={addCustom} style={{ width: '100%', padding: 14, background: C.sage, color: C.white, border: 'none', borderRadius: 12, fontSize: 12, fontFamily: MONO, letterSpacing: '2px', textTransform: 'uppercase', cursor: 'pointer', marginTop: 8 }}>
+              Add to Library
+            </button>
+            <p style={{ fontSize: 10, color: C.sageMid, fontFamily: MONO, marginTop: 10, textAlign: 'center' }}>Saved permanently in your equipment library</p>
+          </div>
+        </div>
+      )}
+
       {toast && <Toast msg={toast} />}
     </div>
   )
