@@ -682,18 +682,65 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
     })
   }, [])
 
-  // Match an exercise block to library entry (fuzzy lookup)
+  // Smart fuzzy matcher — handles abbreviations, plurals, variations
+  const normalize = (s) => {
+    if (!s) return ''
+    return s.toLowerCase()
+      .replace(/\(.*?\)/g, '')                    // remove parentheses
+      .replace(/\bsa\b/g, 'single arm')           // SA → single arm
+      .replace(/\bsl\b/g, 'single leg')           // SL → single leg
+      .replace(/\bkb\b/g, 'kettlebell')          // KB → kettlebell
+      .replace(/\bdb\b/g, 'dumbbell')            // DB → dumbbell
+      .replace(/\bbb\b/g, 'barbell')             // BB → barbell
+      .replace(/\bohp\b/g, 'overhead press')     // OHP
+      .replace(/\brdl\b/g, 'romanian deadlift')  // RDL
+      .replace(/\bgm\b/g, 'good morning')        // GM
+      .replace(/\brfess\b/g, 'rear foot elevated split squat')
+      .replace(/\bbench press\b/g, 'bench press')
+      .replace(/\s+→.+$/, '')                    // remove → variations  
+      .replace(/\s+to\s+.+$/, '')                // remove "to X"
+      .replace(/\s+with\s+.+$/, '')              // remove "with X"
+      .replace(/[-—/]/g, ' ')                     // dashes
+      .replace(/[+&]/g, ' ')                       // pluses
+      .replace(/[.,!?'"]/g, '')                    // punctuation
+      .replace(/\bs\b/g, '')                     // bare plural s
+      .replace(/(\w+)s\b/g, '$1')                // trailing s on words
+      .replace(/\s+/g, ' ')                       // collapse whitespace
+      .trim()
+  }
+
+  // Build normalized lookup once exerciseLib is loaded
+  const normalizedLib = (() => {
+    const m = {}
+    Object.entries(exerciseLib).forEach(([k, v]) => {
+      m[normalize(k)] = v
+      // Also index by aliases if present
+      ;(v.aliases || []).forEach(a => { m[normalize(a)] = v })
+    })
+    return m
+  })()
+
   const findEx = (name) => {
-    if (!name) return null
-    const key = name.toLowerCase().trim()
-    if (exerciseLib[key]) return exerciseLib[key]
-    // Try common variations
-    const stripped = key.replace(/\s+(machine|smith)$/, '').replace(/\(.*\)/g, '').trim()
-    if (exerciseLib[stripped]) return exerciseLib[stripped]
-    // Try contains match
-    const keys = Object.keys(exerciseLib)
-    const partial = keys.find(k => k.includes(key) || key.includes(k))
-    return partial ? exerciseLib[partial] : null
+    if (!name || Object.keys(exerciseLib).length === 0) return null
+    const exact = exerciseLib[name.toLowerCase().trim()]
+    if (exact) return exact
+    const norm = normalize(name)
+    if (normalizedLib[norm]) return normalizedLib[norm]
+    // Try removing common prefixes
+    const noPrefix = norm.replace(/^(banded|cable|machine|smith)\s+/, '')
+    if (normalizedLib[noPrefix]) return normalizedLib[noPrefix]
+    // Try with prefix removed but base word retained — best partial match
+    const keys = Object.keys(normalizedLib)
+    // 1. Exact word-boundary match (norm fully contained in key or vice versa)
+    let best = keys.find(k => k === norm)
+    if (best) return normalizedLib[best]
+    // 2. Norm contained in library key
+    best = keys.find(k => k.includes(norm) && Math.abs(k.length - norm.length) < 15)
+    if (best) return normalizedLib[best]
+    // 3. Library key contained in norm
+    best = keys.find(k => norm.includes(k) && k.length >= 4)
+    if (best) return normalizedLib[best]
+    return null
   }
 
   // Compute risk flags for a day based on all blocks
