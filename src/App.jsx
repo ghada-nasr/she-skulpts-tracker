@@ -596,6 +596,12 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
   const loadProgramDays = async (programId) => {
     const { data } = await supabase.from('program_days').select('*').eq('program_id', programId).order('day_order', { ascending: true })
     setProgramDays(data || [])
+    if (data && data.length > 0) {
+      setActiveDay(data[0])
+      setActiveDayIndex(0)
+      const { data: blocks } = await supabase.from('exercise_blocks').select('*').eq('day_id', data[0].id).order('block_order', { ascending: true })
+      setDayBlocks(blocks || [])
+    }
   }
 
   const loadDayBlocks = async (dayId) => {
