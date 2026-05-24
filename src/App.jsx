@@ -1668,7 +1668,7 @@ function ExerciseLibraryTab() {
               <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase' }}>Primary</Mono>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 4 }}>
                 {(e.primary_muscles || []).map(m => (
-                  <span key={m} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: C.sage, color: C.white }}>{m.replace(/_/g,' ')}</span>
+                  <span key={m} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: C.sage, color: C.white }}>{prettifyLabel(m)}</span>
                 ))}
               </div>
             </div>
@@ -1677,7 +1677,7 @@ function ExerciseLibraryTab() {
                 <Mono style={{ fontSize: 8, color: C.sageMid, textTransform: 'uppercase' }}>Secondary</Mono>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 4 }}>
                   {(e.secondary_muscles || []).map(m => (
-                    <span key={m} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: `${C.sage}25`, color: C.sageDark }}>{m.replace(/_/g,' ')}</span>
+                    <span key={m} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: `${C.sage}25`, color: C.sageDark }}>{prettifyLabel(m)}</span>
                   ))}
                 </div>
               </div>
@@ -1689,7 +1689,7 @@ function ExerciseLibraryTab() {
             <Mono style={{ fontSize: 9, color: C.sage, textTransform: 'uppercase', letterSpacing: '2px', display: 'block', marginBottom: 6 }}>Equipment</Mono>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {(e.equipment || []).map(eq => (
-                <span key={eq} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageDark }}>{eq.replace(/_/g,' ')}</span>
+                <span key={eq} style={{ fontFamily: MONO, fontSize: 9, padding: '2px 8px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageDark }}>{prettifyLabel(eq)}</span>
               ))}
             </div>
           </Card>
@@ -1757,7 +1757,7 @@ function ExerciseLibraryTab() {
               {(e.contraindications || []).map((c, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
                   <span style={{ color: '#C0392B', fontSize: 10 }}>✕</span>
-                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.sageDark }}>{c.replace(/_/g,' ')}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 11, color: C.sageDark }}>{prettifyLabel(c)}</span>
                 </div>
               ))}
             </Card>
@@ -1784,13 +1784,13 @@ function ExerciseLibraryTab() {
             {(e.best_used_for||[]).length > 0 && (
               <Card style={{ marginBottom: 0 }}>
                 <Mono style={{ fontSize: 8, color: C.sage, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block', marginBottom: 6 }}>Best For</Mono>
-                {(e.best_used_for||[]).map(t => <Mono key={t} style={{ fontSize: 9, color: C.sageDark, display: 'block', marginBottom: 2 }}>· {t.replace(/_/g,' ')}</Mono>)}
+                {(e.best_used_for||[]).map(t => <Mono key={t} style={{ fontSize: 9, color: C.sageDark, display: 'block', marginBottom: 2 }}>· {prettifyLabel(t)}</Mono>)}
               </Card>
             )}
             {(e.not_ideal_for||[]).length > 0 && (
               <Card style={{ marginBottom: 0 }}>
                 <Mono style={{ fontSize: 8, color: C.amber, textTransform: 'uppercase', letterSpacing: '1.5px', display: 'block', marginBottom: 6 }}>Not Ideal For</Mono>
-                {(e.not_ideal_for||[]).map(t => <Mono key={t} style={{ fontSize: 9, color: C.sageDark, display: 'block', marginBottom: 2 }}>· {t.replace(/_/g,' ')}</Mono>)}
+                {(e.not_ideal_for||[]).map(t => <Mono key={t} style={{ fontSize: 9, color: C.sageDark, display: 'block', marginBottom: 2 }}>· {prettifyLabel(t)}</Mono>)}
               </Card>
             )}
           </div>
