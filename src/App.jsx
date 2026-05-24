@@ -116,9 +116,9 @@ const ExerciseIntel = ({ ex, color }) => {
     <div style={{ background: `${color}10`, borderTop: `1px solid ${color}30`, padding: '10px 14px 12px' }}>
       <div style={{ fontFamily: MONO, fontSize: 8, color: color, textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 6 }}>Exercise Intelligence</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-        {ex.movement_pattern && <span style={{ fontFamily: MONO, fontSize: 8, padding: '2px 7px', borderRadius: 99, background: color, color: '#FFF', textTransform: 'uppercase', letterSpacing: '1px' }}>{ex.movement_pattern}</span>}
+        {ex.movement_pattern && <span style={{ fontFamily: MONO, fontSize: 8, padding: '2px 7px', borderRadius: 99, background: color, color: '#FFF', textTransform: 'uppercase', letterSpacing: '1px' }}>{prettifyLabel(ex.movement_pattern)}</span>}
         {(ex.primary_muscles || []).slice(0, 4).map(m => (
-          <span key={m} style={{ fontFamily: MONO, fontSize: 8, padding: '2px 7px', borderRadius: 99, background: '#FFF', color: C.sageDark, border: `1px solid ${color}40` }}>{m.replace(/_/g, ' ')}</span>
+          <span key={m} style={{ fontFamily: MONO, fontSize: 8, padding: '2px 7px', borderRadius: 99, background: '#FFF', color: C.sageDark, border: `1px solid ${color}40` }}>{prettifyLabel(m)}</span>
         ))}
       </div>
       {stressItems.length > 0 && (
@@ -138,7 +138,7 @@ const ExerciseIntel = ({ ex, color }) => {
       {(ex.contraindications || []).length > 0 && (
         <div style={{ marginTop: 8, padding: '6px 8px', background: '#C0392B15', borderRadius: 6, borderLeft: '2px solid #C0392B' }}>
           <span style={{ fontFamily: MONO, fontSize: 8, color: '#C0392B', textTransform: 'uppercase', letterSpacing: '1px', display: 'block' }}>Caution</span>
-          <span style={{ fontFamily: MONO, fontSize: 9, color: C.sageDark }}>{(ex.contraindications || []).map(c => c.replace(/_/g, ' ')).join(' · ')}</span>
+          <span style={{ fontFamily: MONO, fontSize: 9, color: C.sageDark }}>{(ex.contraindications || []).map(prettifyLabel).join(' · ')}</span>
         </div>
       )}
     </div>
@@ -761,7 +761,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
     if (shHigh >= 2) flags.push({ level: 'warning', text: `${shHigh} exercises with high shoulder stress in same session` })
     if (kneeHigh >= 2) flags.push({ level: 'warning', text: `${kneeHigh} exercises with high knee stress — monitor closely` })
     Object.entries(patterns).forEach(([p, count]) => {
-      if (count >= 4) flags.push({ level: 'info', text: `${count} ${p} exercises — high movement redundancy` })
+      if (count >= 4) flags.push({ level: 'info', text: `${count} ${prettifyLabel(p)} exercises — high movement redundancy` })
     })
     return flags
   }
@@ -2037,7 +2037,7 @@ function ClientHealthProfile({ client }) {
                 <span style={{ fontFamily: INCISED, fontSize: 12, fontWeight: 600, color: C.sageDark }}>{h.title}</span>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {h.body_part && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase' }}>{h.body_part.replace(/_/g,' ')}</Mono>}
+                {h.body_part && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase' }}>{prettifyLabel(h.body_part)}</Mono>}
                 {h.severity && h.severity !== 'n/a' && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: h.severity === 'severe' ? '#C0392B20' : h.severity === 'resolved' ? `${C.sage}20` : `${C.amber}20`, color: h.severity === 'severe' ? '#C0392B' : h.severity === 'resolved' ? C.sage : C.amber, textTransform: 'uppercase' }}>{h.severity}</Mono>}
                 {h.side && h.side !== 'n/a' && <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase' }}>{h.side}</Mono>}
                 <Mono style={{ fontSize: 8, padding: '1px 6px', borderRadius: 99, background: h.status === 'active' ? `${C.amber}20` : `${C.sage}20`, color: h.status === 'active' ? C.amber : C.sage, textTransform: 'uppercase' }}>{h.status}</Mono>
@@ -2172,7 +2172,7 @@ function ClientEquipmentProfile({ client, setClients }) {
           {/* Equipment by category */}
           {Object.entries(groupedLib).map(([cat, items]) => (
             <div key={cat} style={{ marginBottom: 10 }}>
-              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.sageMid, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{catLabel[cat] || cat}</Mono>
+              <Mono style={{ fontSize: 8, letterSpacing: '2px', color: C.sageMid, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{catLabel[cat] || prettifyLabel(cat)}</Mono>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                 {items.map(eq => (
                   <button key={eq.id} onClick={() => toggle(eq.name)} style={{
