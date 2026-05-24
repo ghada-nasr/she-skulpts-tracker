@@ -1596,6 +1596,80 @@ export default function App() {
 // ═══════════════════════════════════════════════════════════════════
 // EXERCISE LIBRARY TAB
 // ═══════════════════════════════════════════════════════════════════
+
+// ─── Library filter optgroup hierarchy (Patch 12a.3 — Layer 1 display only) ──
+// Purpose: visual grouping of dropdown options under recognized parent headers.
+// NOT canonical taxonomy — UI categorization only, anchored to in-use canonical
+// values from the live DB as of May 24, 2026. Selecting a parent header does
+// nothing (HTML optgroup labels aren't selectable). Filter semantics unchanged:
+// each <option value> still does exact-match against canonical fields.
+// Layer 3 (Round 3) will replace these static maps with DB-driven hierarchy.
+
+const MUSCLE_GROUPS = {
+  'Glutes': ['Glutes', 'Gluteus Maximus', 'Gluteus Medius', 'Gluteus Minimus'],
+  'Quadriceps': ['Quadriceps', 'Rectus Femoris', 'Vastus Medialis', 'VMO'],
+  'Hamstrings': ['Hamstrings'],
+  'Calves & Lower Leg': ['Calves', 'Gastrocnemius', 'Soleus', 'Tibialis Anterior', 'Achilles Tendon', 'Ankle Stabilizers'],
+  'Hips': ['Hip Abductors', 'Adductors', 'Hip External Rotators', 'Hip Internal Rotators', 'Hip Flexors', 'Piriformis', 'Psoas'],
+  'Shoulders': ['Shoulders', 'Deltoids', 'Anterior Deltoid', 'Lateral Deltoid', 'Posterior Deltoid'],
+  'Chest': ['Chest', 'Pectoralis Major', 'Upper Chest', 'Mid Chest', 'Lower Chest'],
+  'Back': ['Back', 'Latissimus Dorsi', 'Rhomboids', 'Trapezius', 'Upper Trapezius', 'Middle Trapezius', 'Lower Trapezius', 'Erector Spinae', 'Teres Major', 'Lower Back', 'Lumbar Spine', 'Multifidus', 'Thoracic Spine', 'Quadratus Lumborum'],
+  'Biceps & Brachialis': ['Biceps Brachii', 'Biceps Long Head', 'Biceps Short Head', 'Brachialis', 'Brachioradialis'],
+  'Triceps': ['Triceps Brachii', 'Triceps Lateral Head', 'Triceps Long Head'],
+  'Forearms & Grip': ['Forearms', 'Forearm Extensors', 'Forearm Flexors', 'Forearm Pronators', 'Forearm Supinators', 'Grip'],
+  'Core': ['Core', 'Rectus Abdominis', 'Obliques', 'Transverse Abdominis', 'Lower Abs', 'Upper Abs', 'Diaphragm'],
+  'Rotator Cuff': ['Rotator Cuff', 'Infraspinatus', 'Subscapularis', 'Teres Minor'],
+  'Neck & Cervical': ['Cervical Spine', 'Deep Neck Flexors', 'Scalenes'],
+}
+
+const EQUIPMENT_GROUPS = {
+  'Free Weights': ['Barbell', 'Dumbbell', 'EZ Bar', 'Kettlebell', 'Weight Plate', 'Weight Vest', 'Trap Bar', 'Landmine', 'Sandbag', 'Medicine Ball', 'Slam Ball'],
+  'Cables': ['Cable Pulley Machine', 'Lat Pulldown Machine', 'Rope Cable Attachment', 'Straight Bar Cable Attachment', 'V-Bar Cable Attachment', 'EZ Bar Cable Attachment', 'Single Handle'],
+  'Resistance Machines': ['Smith Machine', 'Hack Squat Machine', 'Hip Abduction Machine', 'Hip Adduction Machine', 'Hip Thrust Machine', 'Leg Curl Machine', 'Leg Extension Machine', 'Leg Press Machine', 'Pec Deck Machine', 'Reverse Hyper Machine', 'Calf Raise Machine', 'Chest Press Machine', 'Seated Row Machine', 'T-Bar Row Machine', 'Assisted Dip Machine'],
+  'Benches, Boxes & Racks': ['Bench', 'Adjustable Bench', 'Incline Bench', 'Preacher Bench', 'Plyo Box', 'Step Platform', 'Squat Rack', 'Hyperextension Bench', 'Roman Chair', 'Chair', 'Glute Ham Developer'],
+  'Bodyweight & Rigs': ['Bodyweight', 'Pull-Up Bar', 'Wall', 'Floor / Mat', 'Yoga Mat', 'Gymnastic Rings', 'Parallel Bars', 'Parallettes', 'Dip Station', 'Dip Belt', 'TRX / Suspension Trainer', 'Cushion', 'AbMat', 'Yoga Block'],
+  'Bands': ['Resistance Band', 'Mini Band', 'Cuff Band', 'Anchor Point', 'Bungee Cord'],
+  'Cardio': ['Air Bike', 'Bike Erg', 'Rower', 'Ski Erg', 'Treadmill', 'Stationary Bike', 'Jump Rope'],
+  'Field, Court & Agility': ['Cone', 'Court / Field', 'Open Space', 'Agility Ladder', 'Hurdle', 'Sled', 'Running Track'],
+  'Recovery & Mobility Tools': ['Foam Roller', 'Massage Ball', 'Stability Ball', 'Stability Pole', 'Slider', 'Balance Board', 'PVC Pipe', 'Heel Elevation'],
+  'Accessories & Tracking': ['Ab Wheel', 'Towel', 'Wrist Roller', 'Thick Grips', 'Rice Bucket', 'Hand Gripper', 'Racquet', 'Running Shoes', 'Partner', 'Heart Rate Monitor', 'Interval Timer', 'Stopwatch'],
+}
+
+const PATTERN_GROUPS = {
+  'Squats & Lunges': ['Bilateral Squat', 'Single-Leg Squat', 'Split Squat', 'Lateral Squat', 'Forward Lunge', 'Step Up', 'Step Down'],
+  'Hinges & Hip Drive': ['Bilateral Hinge', 'Bridge / Hip Drive', 'Hip Extension (Isolated)', 'Hip Flexion (Isolated)', 'Hip Abduction', 'Hip Adduction'],
+  'Upper Push': ['Horizontal Push', 'Vertical Push', 'Elbow Extension', 'Explosive Push'],
+  'Upper Pull': ['Horizontal Pull', 'Vertical Pull', 'Elbow Flexion', 'Explosive Pull'],
+  'Carries': ['Bilateral Carry', 'Overhead Carry'],
+  'Anti-Patterns (Core)': ['Anti-Extension', 'Anti-Flexion', 'Anti-Lateral Flexion', 'Anti-Rotation'],
+  'Spinal Movement': ['Spinal Extension', 'Spinal Flexion', 'Spinal Rotation', 'Lateral Flexion', 'Spinal Mobility'],
+  'Rotational Power': ['Rotational Lift', 'Rotational Throw'],
+  'Jump & Plyo': ['Bound / Hop', 'Vertical Jump', 'Horizontal Jump', 'Lateral Jump', 'Split Jump'],
+  'Olympic Lifting': ['Olympic Clean', 'Olympic Hybrid', 'Olympic Snatch'],
+  'Locomotion': ['Running', 'Sprinting', 'Cycling', 'Rowing', 'Walking', 'Jump Rope', 'Crawling'],
+  'Mobility & Stretch': ['Ankle Mobility', 'Hip Mobility', 'Shoulder Mobility', 'Thoracic Mobility', 'Dynamic Stretch'],
+  'Shoulder & Scapular Actions': ['Shoulder Abduction', 'Shoulder Extension', 'Shoulder External Rotation', 'Shoulder Flexion', 'Scapular Depression', 'Scapular Protraction', 'Scapular Retraction'],
+  'Joint Isolation (Knee / Wrist)': ['Knee Extension', 'Knee Flexion', 'Wrist Extension', 'Wrist Flexion'],
+}
+
+// Helper: returns [{label, items}] sections — only parents with >=1 in-use child appear.
+// Unmatched values land in a final 'Other' section. Alphabetical order within each section.
+function groupOptions(allValues, groups) {
+  const inUse = new Set(allValues)
+  const sections = []
+  const used = new Set()
+  for (const [parent, children] of Object.entries(groups)) {
+    const present = children.filter(c => inUse.has(c)).sort()
+    if (present.length > 0) {
+      sections.push({ label: parent, items: present })
+      present.forEach(c => used.add(c))
+    }
+  }
+  const others = allValues.filter(v => !used.has(v)).sort()
+  if (others.length > 0) sections.push({ label: 'Other', items: others })
+  return sections
+}
+
 function ExerciseLibraryTab() {
   const [exercises, setExercises] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1816,17 +1890,29 @@ function ExerciseLibraryTab() {
         <select value={filterPattern} onChange={e => setFilterPattern(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Patterns</option>
-          {patterns.map(p => <option key={p} value={p}>{p}</option>)}
+          {groupOptions(patterns, PATTERN_GROUPS).map(section => (
+            <optgroup key={section.label} label={section.label}>
+              {section.items.map(p => <option key={p} value={p}>{prettifyLabel(p)}</option>)}
+            </optgroup>
+          ))}
         </select>
         <select value={filterMuscle} onChange={e => setFilterMuscle(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Muscles</option>
-          {muscles.map(m => <option key={m} value={m}>{m.replace(/_/g,' ')}</option>)}
+          {groupOptions(muscles, MUSCLE_GROUPS).map(section => (
+            <optgroup key={section.label} label={section.label}>
+              {section.items.map(m => <option key={m} value={m}>{prettifyLabel(m)}</option>)}
+            </optgroup>
+          ))}
         </select>
         <select value={filterEquip} onChange={e => setFilterEquip(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Equipment</option>
-          {equipments.map(eq => <option key={eq} value={eq}>{eq.replace(/_/g,' ')}</option>)}
+          {groupOptions(equipments, EQUIPMENT_GROUPS).map(section => (
+            <optgroup key={section.label} label={section.label}>
+              {section.items.map(eq => <option key={eq} value={eq}>{prettifyLabel(eq)}</option>)}
+            </optgroup>
+          ))}
         </select>
         {(filterPattern || filterMuscle || filterEquip || search) && (
           <button onClick={() => { setFilterPattern(''); setFilterMuscle(''); setFilterEquip(''); setSearch('') }}
