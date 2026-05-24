@@ -1677,13 +1677,14 @@ function ExerciseLibraryTab() {
   const [filterPattern, setFilterPattern] = useState('')
   const [filterEquip, setFilterEquip] = useState('')
   const [filterMuscle, setFilterMuscle] = useState('')
+  const [filterCategory, setFilterCategory] = useState('')
   const [selected, setSelected] = useState(null)
 
   useEffect(() => { loadExercises() }, [])
 
   const loadExercises = async () => {
     setLoading(true)
-    const { data } = await supabase.from('exercises').select('*').order('name')
+    const { data } = await supabase.from('exercises').select('*').order('name').range(0, 4999)
     setExercises(data || [])
     setLoading(false)
   }
@@ -1691,6 +1692,7 @@ function ExerciseLibraryTab() {
   const patterns = [...new Set(exercises.map(e => e.movement_pattern).filter(Boolean))].sort()
   const equipments = [...new Set(exercises.flatMap(e => e.equipment || []))].sort()
   const muscles = [...new Set(exercises.flatMap(e => e.primary_muscles || []))].sort()
+  const categories = [...new Set(exercises.map(e => e.category).filter(Boolean))].sort()
 
   const filtered = exercises.filter(e => {
     const q = search.toLowerCase()
@@ -1700,7 +1702,8 @@ function ExerciseLibraryTab() {
     const matchPattern = !filterPattern || e.movement_pattern === filterPattern
     const matchEquip = !filterEquip || (e.equipment || []).includes(filterEquip)
     const matchMuscle = !filterMuscle || (e.primary_muscles || []).includes(filterMuscle)
-    return matchSearch && matchPattern && matchEquip && matchMuscle
+    const matchCategory = !filterCategory || e.category === filterCategory
+    return matchSearch && matchPattern && matchEquip && matchMuscle && matchCategory
   })
 
   const stressColor = n => n === 1 ? C.sage : n === 2 ? C.amber : '#C0392B'
@@ -1914,8 +1917,13 @@ function ExerciseLibraryTab() {
             </optgroup>
           ))}
         </select>
-        {(filterPattern || filterMuscle || filterEquip || search) && (
-          <button onClick={() => { setFilterPattern(''); setFilterMuscle(''); setFilterEquip(''); setSearch('') }}
+        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+          style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
+          <option value="">All Categories</option>
+          {categories.map(c => <option key={c} value={c}>{prettifyLabel(c)}</option>)}
+        </select>
+        {(filterPattern || filterMuscle || filterEquip || filterCategory || search) && (
+          <button onClick={() => { setFilterPattern(''); setFilterMuscle(''); setFilterEquip(''); setFilterCategory(''); setSearch('') }}
             style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.amber}`, background: 'none', fontSize: 10, color: C.amber, fontFamily: MONO, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             Clear ✕
           </button>
