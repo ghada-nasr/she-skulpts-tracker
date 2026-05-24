@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabase.js'
+import { prettifyLabel } from './lib/prettifyLabel.js'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 // ─── Brand tokens ──────────────────────────────────────────────────────────
@@ -1850,7 +1851,7 @@ function ExerciseLibraryTab() {
               <div style={{ flex: 1 }}>
                 <span style={{ fontFamily: INCISED, fontSize: 13, fontWeight: 600, color: C.sageDark, display: 'block' }}>{e.name}</span>
                 <Mono style={{ fontSize: 9, color: C.sageMid, marginTop: 2 }}>
-                  {(e.primary_muscles || []).slice(0,2).map(m => m.replace(/_/g,' ')).join(' · ')}
+                  {(e.primary_muscles || []).slice(0,2).map(prettifyLabel).join(' · ')}
                 </Mono>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
