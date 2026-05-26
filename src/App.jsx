@@ -526,9 +526,11 @@ function ClientDetail({ client, clients, setClients, setTab, setSelectedClient }
 
       {/* Action bar */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, padding: '10px 16px 28px', background: C.creamLight, borderTop: `1px solid ${C.creamDark}50`, display: 'flex', gap: 8 }}>
-        <button onClick={() => setShowLog(true)} style={{ flex: 1, padding: 14, background: C.sage, color: C.white, border: 'none', borderRadius: 10, fontSize: 13, fontFamily: MONO, letterSpacing: '1.5px', textTransform: 'uppercase', cursor: 'pointer' }}>
-          + Log Session
-        </button>
+        {!isDone && (
+          <button onClick={() => setShowLog(true)} style={{ flex: 1, padding: 14, background: C.sage, color: C.white, border: 'none', borderRadius: 10, fontSize: 13, fontFamily: MONO, letterSpacing: '1.5px', textTransform: 'uppercase', cursor: 'pointer' }}>
+            + Log Session
+          </button>
+        )}
         {isDone && (
           <button onClick={startNewPackage} style={{ flex: 1, padding: 14, background: C.sageMid, color: C.cream, border: 'none', borderRadius: 10, fontSize: 12, fontFamily: MONO, letterSpacing: '1.5px', textTransform: 'uppercase', cursor: 'pointer' }}>
             New Pkg →
