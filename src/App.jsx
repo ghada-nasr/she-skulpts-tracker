@@ -1293,7 +1293,7 @@ function ProgressionTab({ clients, selectedClient, setSelectedClient }) {
 
   const loadLogs = async () => {
     setLoading(true)
-    let query = supabase.from('exercise_logs').select('*').order('date', { ascending: true })
+    let query = supabase.from('exercise_logs').select('*').order('created_at', { ascending: true })
     if (clientFilter) query = query.eq('client_id', clientFilter)
     const { data } = await query
     setLogs(data || [])
