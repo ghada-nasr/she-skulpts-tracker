@@ -1186,7 +1186,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
 
       {/* Client filter pills */}
       <div style={{ background: C.sage, padding: '0 16px 12px', display: 'flex', gap: 6, overflowX: 'auto' }}>
-        <button onClick={() => setClientFilter2('')} style={{
+        <button onClick={() => { setClientFilter2(''); setSelectedClient(null) }} style={{
           padding: '4px 12px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap',
           borderColor: clientFilter2 === '' ? C.white : `${C.white}50`,
           background: clientFilter2 === '' ? C.white : 'transparent',
@@ -1194,7 +1194,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
           fontSize: 9, letterSpacing: '2px', textTransform: 'uppercase', fontFamily: MONO, cursor: 'pointer',
         }}>All</button>
         {clients.map(c => (
-          <button key={c.id} onClick={() => setClientFilter2(c.id)} style={{
+          <button key={c.id} onClick={() => { setClientFilter2(c.id); setSelectedClient(null) }} style={{
             padding: '4px 12px', borderRadius: 99, border: '1px solid', whiteSpace: 'nowrap',
             borderColor: clientFilter2 === c.id ? C.white : `${C.white}50`,
             background: clientFilter2 === c.id ? C.white : 'transparent',
