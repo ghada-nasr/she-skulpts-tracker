@@ -171,17 +171,60 @@ const Input = ({ label, value, onChange, placeholder, type = 'text' }) => (
   </div>
 )
 
-const ExercisePicker = ({ label, value, onChange, placeholder, exerciseLib }) => {
+// ─── Layer 3a/3d: Query expansion utilities (module scope, pure functions) ───
+// Defensive domain → exercise column map. Unknown domains (e.g. 'tag') silently inert.
+// MUST be defined at module scope so both ExerciseLibraryTab and ExercisePicker can use them.
+const DOMAIN_COLUMN_MAP = {
+  category: (e, c) => (e.category || '').toLowerCase() === c,
+  equipment: (e, c) => (e.equipment || []).some(eq => eq.toLowerCase() === c),
+  movement_pattern: (e, c) => (e.movement_pattern || '').toLowerCase() === c,
+  muscle: (e, c) => (e.body_region || '').toLowerCase() === c ||
+                    (e.primary_muscles || []).some(m => m.toLowerCase() === c) ||
+                    (e.secondary_muscles || []).some(m => m.toLowerCase() === c),
+  // 'tag' domain: Layer 4 dependency (no direct exercise column yet)
+}
+
+// Expand a typed query through taxonomy_aliases into {domain, canonical} pairs.
+// Returns empty array for short queries or when index isn't ready.
+const expandQuery = (q, idx) => {
+  if (!q || q.length < 2 || !idx) return []
+  const key = q.toLowerCase().trim()
+  const out = []
+  if (idx.has(key)) out.push(...idx.get(key))
+  if (key.length >= 3) {
+    for (const [alias, targets] of idx.entries()) {
+      if (alias !== key && alias.includes(key)) out.push(...targets)
+    }
+  }
+  return out
+}
+
+// Test if exercise matches any of the expanded {domain, canonical} pairs.
+const matchExpanded = (e, pairs) => {
+  for (const { domain, canonical } of pairs) {
+    const checker = DOMAIN_COLUMN_MAP[domain]
+    if (checker && checker(e, canonical)) return true
+  }
+  return false
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ExercisePicker = ({ label, value, onChange, placeholder, exerciseLib, aliasIndex }) => {
   const [query, setQuery] = useState(value || '')
   const [showResults, setShowResults] = useState(false)
 
   // Sync query if external value changes (form reset, etc.)
   useEffect(() => { setQuery(value || '') }, [value])
 
-  // Compute top 8 substring matches against exerciseLib
+  // Compute top 8 matches: substring on name (primary) + alias expansion (additive)
   const q = (query || '').toLowerCase().trim()
+  const expandedPairs = expandQuery(query, aliasIndex)
   const results = (q.length >= 2 && exerciseLib)
-    ? Object.values(exerciseLib).filter(ex => ex && ex.name && ex.name.toLowerCase().includes(q)).slice(0, 8)
+    ? Object.values(exerciseLib).filter(ex => {
+        if (!ex || !ex.name) return false
+        if (ex.name.toLowerCase().includes(q)) return true
+        return matchExpanded(ex, expandedPairs)
+      }).slice(0, 8)
     : []
 
   const handleSelect = (ex) => {
@@ -711,6 +754,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
   const [collapsedGroups, setCollapsedGroups] = useState(new Set())
   const [expandedBlocks, setExpandedBlocks] = useState(new Set())
   const [exerciseLib, setExerciseLib] = useState({})
+  const [aliasIndex, setAliasIndex] = useState(null)
   const toggleGroup = key => setCollapsedGroups(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
   const toggleBlockExpand = id => setExpandedBlocks(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   // Reset collapsed state when changing day
@@ -757,6 +801,17 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
       const lib = {}
       ;(data || []).forEach(e => { lib[e.name.toLowerCase()] = e })
       setExerciseLib(lib)
+    })
+    // Layer 3d: load taxonomy_aliases for Picker alias expansion
+    supabase.from('taxonomy_aliases').select('domain, canonical, alias').then(({ data }) => {
+      const idx = new Map()
+      for (const row of (data || [])) {
+        const key = (row.alias || '').toLowerCase().trim()
+        if (!key || row.alias === row.canonical) continue
+        if (!idx.has(key)) idx.set(key, [])
+        idx.get(key).push({ domain: row.domain, canonical: (row.canonical || '').toLowerCase() })
+      }
+      setAliasIndex(idx)
     })
   }, [])
 
@@ -1178,7 +1233,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
                 <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 20, color: C.sageDark }}>Add Exercise</h2>
                 <button onClick={() => setShowAddBlock(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: C.sageMid, cursor: 'pointer' }}>✕</button>
               </div>
-              <ExercisePicker label="Exercise Name" value={newBlockForm.exercise_name} onChange={v => setNewBlockForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" exerciseLib={exerciseLib} />
+              <ExercisePicker label="Exercise Name" value={newBlockForm.exercise_name} onChange={v => setNewBlockForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" exerciseLib={exerciseLib} aliasIndex={aliasIndex} />
               <Select label="Block Type" value={newBlockForm.block_type} onChange={v => setNewBlockForm(p => ({ ...p, block_type: v }))}
                 options={[{ value: 'single', label: 'Single' }, { value: 'superset', label: 'Superset' }, { value: 'triset', label: 'Triset' }, { value: 'complex', label: 'Complex' }]} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
@@ -1364,14 +1419,26 @@ function ProgressionTab({ clients, selectedClient, setSelectedClient }) {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [exerciseLib, setExerciseLib] = useState({})
+  const [aliasIndex, setAliasIndex] = useState(null)
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
 
   useEffect(() => {
-    supabase.from('exercises').select('name, movement_pattern, primary_muscles').range(0, 4999).then(({ data }) => {
+    supabase.from('exercises').select('name, movement_pattern, primary_muscles, secondary_muscles, equipment, body_region, category').range(0, 4999).then(({ data }) => {
       const lib = {}
       ;(data || []).forEach(e => { lib[e.name.toLowerCase()] = e })
       setExerciseLib(lib)
+    })
+    // Layer 3d: load taxonomy_aliases for Picker alias expansion
+    supabase.from('taxonomy_aliases').select('domain, canonical, alias').then(({ data }) => {
+      const idx = new Map()
+      for (const row of (data || [])) {
+        const key = (row.alias || '').toLowerCase().trim()
+        if (!key || row.alias === row.canonical) continue
+        if (!idx.has(key)) idx.set(key, [])
+        idx.get(key).push({ domain: row.domain, canonical: (row.canonical || '').toLowerCase() })
+      }
+      setAliasIndex(idx)
     })
   }, [])
 
@@ -1508,7 +1575,7 @@ function ProgressionTab({ clients, selectedClient, setSelectedClient }) {
             </div>
             <Select label="Client" value={form.client_id} onChange={v => setForm(p => ({ ...p, client_id: v }))}
               options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
-            <ExercisePicker label="Exercise Name" value={form.exercise_name} onChange={v => setForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" exerciseLib={exerciseLib} />
+            <ExercisePicker label="Exercise Name" value={form.exercise_name} onChange={v => setForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" exerciseLib={exerciseLib} aliasIndex={aliasIndex} />
             <Input label="Date" value={form.date} onChange={v => setForm(p => ({ ...p, date: v }))} placeholder="14 May 2026" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
               <Input label="Sets" value={form.sets} onChange={v => setForm(p => ({ ...p, sets: v }))} placeholder="3" />
@@ -1802,45 +1869,6 @@ function ExerciseLibraryTab() {
   const equipments = [...new Set(exercises.flatMap(e => e.equipment || []))].sort()
   const muscles = [...new Set(exercises.flatMap(e => e.primary_muscles || []))].sort()
   const categories = [...new Set(exercises.map(e => e.category).filter(Boolean))].sort()
-
-  // ─── Layer 3a: Query expansion via taxonomy_aliases ─────────────────
-  // Defensive domain → exercise column map. Unknown domains (e.g. 'tag')
-  // are silently inert until Layer 4 adds their exercise associations.
-  // MUST be defined before the filter chain below (const declarations are not hoisted).
-  const DOMAIN_COLUMN_MAP = {
-    category: (e, c) => (e.category || '').toLowerCase() === c,
-    equipment: (e, c) => (e.equipment || []).some(eq => eq.toLowerCase() === c),
-    movement_pattern: (e, c) => (e.movement_pattern || '').toLowerCase() === c,
-    muscle: (e, c) => (e.body_region || '').toLowerCase() === c ||
-                      (e.primary_muscles || []).some(m => m.toLowerCase() === c) ||
-                      (e.secondary_muscles || []).some(m => m.toLowerCase() === c),
-    // 'tag' domain: Layer 4 dependency (no direct exercise column yet)
-  }
-
-  // Expand a typed query through taxonomy_aliases into {domain, canonical} pairs.
-  // Returns empty array for short queries or when index isn't ready.
-  const expandQuery = (q, idx) => {
-    if (!q || q.length < 2 || !idx) return []
-    const key = q.toLowerCase().trim()
-    const out = []
-    if (idx.has(key)) out.push(...idx.get(key))
-    if (key.length >= 3) {
-      for (const [alias, targets] of idx.entries()) {
-        if (alias !== key && alias.includes(key)) out.push(...targets)
-      }
-    }
-    return out
-  }
-
-  // Test if exercise matches any of the expanded {domain, canonical} pairs.
-  const matchExpanded = (e, pairs) => {
-    for (const { domain, canonical } of pairs) {
-      const checker = DOMAIN_COLUMN_MAP[domain]
-      if (checker && checker(e, canonical)) return true
-    }
-    return false
-  }
-  // ────────────────────────────────────────────────────────────────────
 
   const expandedPairs = expandQuery(search, aliasIndex)
 
