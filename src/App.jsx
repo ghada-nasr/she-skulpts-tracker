@@ -171,6 +171,81 @@ const Input = ({ label, value, onChange, placeholder, type = 'text' }) => (
   </div>
 )
 
+const ExercisePicker = ({ label, value, onChange, placeholder, exerciseLib }) => {
+  const [query, setQuery] = useState(value || '')
+  const [showResults, setShowResults] = useState(false)
+
+  // Sync query if external value changes (form reset, etc.)
+  useEffect(() => { setQuery(value || '') }, [value])
+
+  // Compute top 8 substring matches against exerciseLib
+  const q = (query || '').toLowerCase().trim()
+  const results = (q.length >= 2 && exerciseLib)
+    ? Object.values(exerciseLib).filter(ex => ex && ex.name && ex.name.toLowerCase().includes(q)).slice(0, 8)
+    : []
+
+  const handleSelect = (ex) => {
+    setQuery(ex.name)
+    onChange(ex.name)
+    setShowResults(false)
+  }
+
+  const handleChange = (v) => {
+    setQuery(v)
+    onChange(v)
+    setShowResults(true)
+  }
+
+  const handleUseAsTyped = () => {
+    onChange(query)
+    setShowResults(false)
+  }
+
+  return (
+    <div style={{ marginBottom: 12, position: 'relative' }}>
+      <Mono style={{ fontSize: 9, letterSpacing: '2px', color: C.sageMid, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{label}</Mono>
+      <input
+        value={query}
+        onChange={e => handleChange(e.target.value)}
+        onFocus={() => setShowResults(true)}
+        onBlur={() => setTimeout(() => setShowResults(false), 200)}
+        placeholder={placeholder}
+        style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 15, color: C.sageDark, fontFamily: SERIF, outline: 'none' }}
+      />
+      {showResults && q.length >= 2 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          background: C.white, border: `1px solid ${C.creamDark}`,
+          borderRadius: 10, marginTop: 4, maxHeight: 320, overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,.08)', zIndex: 110,
+        }}>
+          {results.map(ex => (
+            <div
+              key={ex.name}
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => handleSelect(ex)}
+              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: `1px solid ${C.creamLight}` }}
+            >
+              <div style={{ fontFamily: SERIF, fontSize: 14, color: C.sageDark, marginBottom: 2 }}>{ex.name}</div>
+              <div style={{ fontFamily: MONO, fontSize: 9, color: C.sageMid, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                {ex.movement_pattern ? prettifyLabel(ex.movement_pattern) : '—'}
+                {(ex.primary_muscles && ex.primary_muscles.length > 0) ? ' · ' + ex.primary_muscles.slice(0, 2).map(prettifyLabel).join(', ') : ''}
+              </div>
+            </div>
+          ))}
+          <div
+            onMouseDown={e => e.preventDefault()}
+            onClick={handleUseAsTyped}
+            style={{ padding: '10px 14px', cursor: 'pointer', background: C.creamLight, fontFamily: MONO, fontSize: 11, color: C.sageMid, letterSpacing: '1px', textTransform: 'uppercase' }}
+          >
+            + Use "{query}" as custom name
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const Select = ({ label, value, onChange, options }) => (
   <div style={{ marginBottom: 12 }}>
     <Mono style={{ fontSize: 9, letterSpacing: '2px', color: C.sageMid, textTransform: 'uppercase', display: 'block', marginBottom: 5 }}>{label}</Mono>
@@ -678,7 +753,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
 
   // Load exercise library lookup once
   useEffect(() => {
-    supabase.from('exercises').select('name, primary_muscles, secondary_muscles, movement_pattern, equipment, lower_back_stress, shoulder_stress, knee_stress, wrist_stress, neck_stress, elbow_stress, spinal_load, contraindications, best_used_for').then(({ data }) => {
+    supabase.from('exercises').select('name, primary_muscles, secondary_muscles, movement_pattern, equipment, lower_back_stress, shoulder_stress, knee_stress, wrist_stress, neck_stress, elbow_stress, spinal_load, contraindications, best_used_for').range(0, 4999).then(({ data }) => {
       const lib = {}
       ;(data || []).forEach(e => { lib[e.name.toLowerCase()] = e })
       setExerciseLib(lib)
@@ -1103,7 +1178,7 @@ function ProgramsTab({ clients, selectedClient, setSelectedClient }) {
                 <h2 style={{ fontFamily: SERIF, fontWeight: 400, fontSize: 20, color: C.sageDark }}>Add Exercise</h2>
                 <button onClick={() => setShowAddBlock(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: C.sageMid, cursor: 'pointer' }}>✕</button>
               </div>
-              <Input label="Exercise Name" value={newBlockForm.exercise_name} onChange={v => setNewBlockForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" />
+              <ExercisePicker label="Exercise Name" value={newBlockForm.exercise_name} onChange={v => setNewBlockForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" exerciseLib={exerciseLib} />
               <Select label="Block Type" value={newBlockForm.block_type} onChange={v => setNewBlockForm(p => ({ ...p, block_type: v }))}
                 options={[{ value: 'single', label: 'Single' }, { value: 'superset', label: 'Superset' }, { value: 'triset', label: 'Triset' }, { value: 'complex', label: 'Complex' }]} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
@@ -1288,8 +1363,17 @@ function ProgressionTab({ clients, selectedClient, setSelectedClient }) {
   const [form, setForm] = useState({ client_id: selectedClient?.id || '', exercise_name: '', date: today(), sets: '', reps: '', weight: '', notes: '' })
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
+  const [exerciseLib, setExerciseLib] = useState({})
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500) }
+
+  useEffect(() => {
+    supabase.from('exercises').select('name, movement_pattern, primary_muscles').range(0, 4999).then(({ data }) => {
+      const lib = {}
+      ;(data || []).forEach(e => { lib[e.name.toLowerCase()] = e })
+      setExerciseLib(lib)
+    })
+  }, [])
 
   useEffect(() => { loadLogs() }, [clientFilter])
 
@@ -1424,7 +1508,7 @@ function ProgressionTab({ clients, selectedClient, setSelectedClient }) {
             </div>
             <Select label="Client" value={form.client_id} onChange={v => setForm(p => ({ ...p, client_id: v }))}
               options={[{ value: '', label: 'Select client...' }, ...clients.map(c => ({ value: c.id, label: c.name }))]} />
-            <Input label="Exercise Name" value={form.exercise_name} onChange={v => setForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" />
+            <ExercisePicker label="Exercise Name" value={form.exercise_name} onChange={v => setForm(p => ({ ...p, exercise_name: v }))} placeholder="e.g. Back Squat" exerciseLib={exerciseLib} />
             <Input label="Date" value={form.date} onChange={v => setForm(p => ({ ...p, date: v }))} placeholder="14 May 2026" />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
               <Input label="Sets" value={form.sets} onChange={v => setForm(p => ({ ...p, sets: v }))} placeholder="3" />
