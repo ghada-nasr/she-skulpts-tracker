@@ -1772,8 +1772,24 @@ function ExerciseLibraryTab() {
     pattern: 'all',
     equipment: 'all',
   })
+  const [aliasIndex, setAliasIndex] = useState(null)
 
   useEffect(() => { loadExercises() }, [])
+
+  // Layer 3a: Load taxonomy_aliases once at mount for query expansion
+  useEffect(() => {
+    supabase.from('taxonomy_aliases').select('domain, canonical, alias').then(({ data }) => {
+      const idx = new Map()
+      for (const row of (data || [])) {
+        const key = (row.alias || '').toLowerCase().trim()
+        if (!key) continue
+        if (row.alias === row.canonical) continue  // skip self-references
+        if (!idx.has(key)) idx.set(key, [])
+        idx.get(key).push({ domain: row.domain, canonical: (row.canonical || '').toLowerCase() })
+      }
+      setAliasIndex(idx)
+    })
+  }, [])
 
   const loadExercises = async () => {
     setLoading(true)
@@ -1787,11 +1803,14 @@ function ExerciseLibraryTab() {
   const muscles = [...new Set(exercises.flatMap(e => e.primary_muscles || []))].sort()
   const categories = [...new Set(exercises.map(e => e.category).filter(Boolean))].sort()
 
+  const expandedPairs = expandQuery(search, aliasIndex)
+
   const filtered = exercises.filter(e => {
     const q = search.toLowerCase()
     const matchSearch = !search || e.name.toLowerCase().includes(q) ||
       (e.aliases || []).some(a => a.toLowerCase().includes(q)) ||
-      (e.primary_muscles || []).some(m => m.toLowerCase().includes(q))
+      (e.primary_muscles || []).some(m => m.toLowerCase().includes(q)) ||
+      matchExpanded(e, expandedPairs)
     const matchPattern = !filterPattern || e.movement_pattern === filterPattern
     const matchEquip = !filterEquip || (e.equipment || []).includes(filterEquip)
     const matchMuscle = !filterMuscle || (e.primary_muscles || []).includes(filterMuscle)
@@ -1850,6 +1869,44 @@ function ExerciseLibraryTab() {
       }
       return { ...prev, [browseMode]: next }
     })
+  }
+  // ────────────────────────────────────────────────────────────────────
+
+  // ─── Layer 3a: Query expansion via taxonomy_aliases ─────────────────
+  // Defensive domain → exercise column map. Unknown domains (e.g. 'tag')
+  // are silently inert until Layer 4 adds their exercise associations.
+  const DOMAIN_COLUMN_MAP = {
+    category: (e, c) => (e.category || '').toLowerCase() === c,
+    equipment: (e, c) => (e.equipment || []).some(eq => eq.toLowerCase() === c),
+    movement_pattern: (e, c) => (e.movement_pattern || '').toLowerCase() === c,
+    muscle: (e, c) => (e.body_region || '').toLowerCase() === c ||
+                      (e.primary_muscles || []).some(m => m.toLowerCase() === c) ||
+                      (e.secondary_muscles || []).some(m => m.toLowerCase() === c),
+    // 'tag' domain: Layer 4 dependency (no direct exercise column yet)
+  }
+
+  // Expand a typed query through taxonomy_aliases into {domain, canonical} pairs.
+  // Returns empty array for short queries or when index isn't ready.
+  const expandQuery = (q, idx) => {
+    if (!q || q.length < 2 || !idx) return []
+    const key = q.toLowerCase().trim()
+    const out = []
+    if (idx.has(key)) out.push(...idx.get(key))
+    if (key.length >= 3) {
+      for (const [alias, targets] of idx.entries()) {
+        if (alias !== key && alias.includes(key)) out.push(...targets)
+      }
+    }
+    return out
+  }
+
+  // Test if exercise matches any of the expanded {domain, canonical} pairs.
+  const matchExpanded = (e, pairs) => {
+    for (const { domain, canonical } of pairs) {
+      const checker = DOMAIN_COLUMN_MAP[domain]
+      if (checker && checker(e, canonical)) return true
+    }
+    return false
   }
   // ────────────────────────────────────────────────────────────────────
 
