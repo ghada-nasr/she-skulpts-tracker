@@ -1765,6 +1765,13 @@ function ExerciseLibraryTab() {
   const [filterMuscle, setFilterMuscle] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [selected, setSelected] = useState(null)
+  const [browseMode, setBrowseMode] = useState('body_region')
+  const [closedByMode, setClosedByMode] = useState({
+    body_region: new Set(),      // default: all sections open
+    muscle: 'all',                // default: all sections collapsed
+    pattern: 'all',
+    equipment: 'all',
+  })
 
   useEffect(() => { loadExercises() }, [])
 
@@ -1791,6 +1798,60 @@ function ExerciseLibraryTab() {
     const matchCategory = !filterCategory || e.category === filterCategory
     return matchSearch && matchPattern && matchEquip && matchMuscle && matchCategory
   })
+
+  // ─── Step 13: Grouped browsing helpers ──────────────────────────────
+  // Resolve which group bucket an exercise falls into for the active mode.
+  // Layer 1 only: simple lookup against existing PATTERN_GROUPS / MUSCLE_GROUPS / EQUIPMENT_GROUPS.
+  // No alias-aware expansion, no tag hierarchy traversal, no semantic grouping.
+  const resolveBucket = (e, mode) => {
+    if (mode === 'body_region') return e.body_region || 'Uncategorized'
+    if (mode === 'pattern') {
+      const p = e.movement_pattern
+      if (!p) return 'Uncategorized'
+      for (const [group, items] of Object.entries(PATTERN_GROUPS)) {
+        if (items.includes(p)) return group
+      }
+      return p
+    }
+    if (mode === 'muscle') {
+      const m = (e.primary_muscles || [])[0]
+      if (!m) return 'Uncategorized'
+      for (const [group, items] of Object.entries(MUSCLE_GROUPS)) {
+        if (items.includes(m)) return group
+      }
+      return m
+    }
+    if (mode === 'equipment') {
+      const eq = (e.equipment || [])[0]
+      if (!eq) return 'Uncategorized'
+      for (const [group, items] of Object.entries(EQUIPMENT_GROUPS)) {
+        if (items.includes(eq)) return group
+      }
+      return eq
+    }
+    return 'Uncategorized'
+  }
+
+  const isSectionOpen = (sectionName) => {
+    const state = closedByMode[browseMode]
+    if (state === 'all') return false
+    return !state.has(sectionName)
+  }
+
+  const toggleSection = (sectionName, allSectionNames) => {
+    setClosedByMode(prev => {
+      const state = prev[browseMode]
+      let next
+      if (state === 'all') {
+        next = new Set(allSectionNames.filter(n => n !== sectionName))
+      } else {
+        next = new Set(state)
+        next.has(sectionName) ? next.delete(sectionName) : next.add(sectionName)
+      }
+      return { ...prev, [browseMode]: next }
+    })
+  }
+  // ────────────────────────────────────────────────────────────────────
 
   const stressColor = n => n === 1 ? C.sage : n === 2 ? C.amber : '#C0392B'
   const stressDot = n => (
@@ -2016,41 +2077,108 @@ function ExerciseLibraryTab() {
         )}
       </div>
 
-      <div style={{ padding: '10px 16px' }}>
-        <Mono style={{ fontSize: 9, color: C.sageMid, display: 'block', marginBottom: 10, letterSpacing: '1px' }}>
-          {filtered.length} exercise{filtered.length !== 1 ? 's' : ''}
-        </Mono>
+      {/* Step 13: Mode pills bar — visible only when no search/filter is active */}
+      {!search && !filterPattern && !filterMuscle && !filterEquip && !filterCategory && (
+        <div style={{ background: `${C.sage}08`, padding: '8px 16px', display: 'flex', gap: 6, overflowX: 'auto', borderBottom: `1px solid ${C.creamDark}40` }}>
+          {[
+            { id: 'body_region', label: 'Body Region' },
+            { id: 'muscle', label: 'Muscle' },
+            { id: 'pattern', label: 'Pattern' },
+            { id: 'equipment', label: 'Equipment' },
+          ].map(m => (
+            <button key={m.id} onClick={() => setBrowseMode(m.id)} style={{
+              padding: '6px 14px', borderRadius: 99, border: 'none',
+              background: browseMode === m.id ? C.sage : C.white,
+              color: browseMode === m.id ? C.white : C.sageDark,
+              fontFamily: MONO, fontSize: 10, letterSpacing: '1.5px', textTransform: 'uppercase',
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>{m.label}</button>
+          ))}
+        </div>
+      )}
 
-        {loading ? <Spinner /> : filtered.map(e => (
-          <div key={e.id} onClick={() => setSelected(e)} style={{
-            background: C.white, borderRadius: 10, padding: '11px 14px', marginBottom: 7,
-            cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.05)',
-            borderLeft: `3px solid ${e.lower_back_stress === 3 ? '#C0392B' : e.lower_back_stress === 2 ? C.amber : C.sage}`,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontFamily: INCISED, fontSize: 13, fontWeight: 600, color: C.sageDark, display: 'block' }}>{e.name}</span>
-                <Mono style={{ fontSize: 9, color: C.sageMid, marginTop: 2 }}>
-                  {(e.primary_muscles || []).slice(0,2).map(prettifyLabel).join(' · ')}
-                </Mono>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: `${C.sage}20`, color: C.sage, textTransform: 'uppercase', letterSpacing: '1px' }}>{e.movement_pattern}</Mono>
-                <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1px' }}>{e.difficulty}</Mono>
-              </div>
-            </div>
-            {/* Quick stress indicators */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              {[{l:'LB', v:e.lower_back_stress},{l:'SH', v:e.shoulder_stress},{l:'KN', v:e.knee_stress}].map(s => s.v && (
-                <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Mono style={{ fontSize: 7, color: C.sageMid }}>{s.l}</Mono>
-                  {[1,2,3].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: 1, background: i <= s.v ? stressColor(s.v) : `${C.creamDark}50` }} />)}
+      {/* Step 13: Grouped browse view when no search/filter active; else flat list (existing) */}
+      {!loading && !search && !filterPattern && !filterMuscle && !filterEquip && !filterCategory ? (
+        <div style={{ padding: '12px 16px' }}>
+          {(() => {
+            const grouped = {}
+            for (const e of filtered) {
+              const bucket = resolveBucket(e, browseMode)
+              if (!grouped[bucket]) grouped[bucket] = []
+              grouped[bucket].push(e)
+            }
+            const sortedSections = Object.keys(grouped).sort((a, b) => {
+              if (a === 'Uncategorized') return 1
+              if (b === 'Uncategorized') return -1
+              return a.localeCompare(b)
+            })
+            return sortedSections.map(sectionName => {
+              const exs = grouped[sectionName]
+              const isOpen = isSectionOpen(sectionName)
+              return (
+                <div key={sectionName} style={{ marginBottom: 10 }}>
+                  <div onClick={() => toggleSection(sectionName, sortedSections)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: C.white, borderRadius: 10, cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+                    <Chevron open={isOpen} size={14} color={C.sage} />
+                    <span style={{ fontFamily: IMPACT, fontSize: 13, letterSpacing: '2px', color: C.sageDark, textTransform: 'uppercase', flex: 1 }}>{sectionName}</span>
+                    <Mono style={{ fontSize: 9, color: C.sageMid }}>{exs.length}</Mono>
+                  </div>
+                  {isOpen && (
+                    <div style={{ marginTop: 6 }}>
+                      {exs.map(e => (
+                        <div key={e.id} onClick={() => setSelected(e)} style={{
+                          background: C.white, borderRadius: 8, padding: '10px 14px', marginBottom: 4,
+                          cursor: 'pointer', borderLeft: `3px solid ${e.lower_back_stress === 3 ? '#C0392B' : e.lower_back_stress === 2 ? C.amber : C.sage}`,
+                        }}>
+                          <span style={{ fontFamily: INCISED, fontSize: 13, fontWeight: 600, color: C.sageDark, display: 'block' }}>{e.name}</span>
+                          <Mono style={{ fontSize: 9, color: C.sageMid, marginTop: 2 }}>
+                            {(e.primary_muscles || []).slice(0,2).map(prettifyLabel).join(' · ')}
+                          </Mono>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
+              )
+            })
+          })()}
+        </div>
+      ) : (
+        <div style={{ padding: '10px 16px' }}>
+          <Mono style={{ fontSize: 9, color: C.sageMid, display: 'block', marginBottom: 10, letterSpacing: '1px' }}>
+            {filtered.length} exercise{filtered.length !== 1 ? 's' : ''}
+          </Mono>
+
+          {loading ? <Spinner /> : filtered.map(e => (
+            <div key={e.id} onClick={() => setSelected(e)} style={{
+              background: C.white, borderRadius: 10, padding: '11px 14px', marginBottom: 7,
+              cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,.05)',
+              borderLeft: `3px solid ${e.lower_back_stress === 3 ? '#C0392B' : e.lower_back_stress === 2 ? C.amber : C.sage}`,
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontFamily: INCISED, fontSize: 13, fontWeight: 600, color: C.sageDark, display: 'block' }}>{e.name}</span>
+                  <Mono style={{ fontSize: 9, color: C.sageMid, marginTop: 2 }}>
+                    {(e.primary_muscles || []).slice(0,2).map(prettifyLabel).join(' · ')}
+                  </Mono>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+                  <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: `${C.sage}20`, color: C.sage, textTransform: 'uppercase', letterSpacing: '1px' }}>{e.movement_pattern}</Mono>
+                  <Mono style={{ fontSize: 7, padding: '2px 7px', borderRadius: 99, background: `${C.creamDark}40`, color: C.sageMid, textTransform: 'uppercase', letterSpacing: '1px' }}>{e.difficulty}</Mono>
+                </div>
+              </div>
+              {/* Quick stress indicators */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                {[{l:'LB', v:e.lower_back_stress},{l:'SH', v:e.shoulder_stress},{l:'KN', v:e.knee_stress}].map(s => s.v && (
+                  <div key={s.l} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Mono style={{ fontSize: 7, color: C.sageMid }}>{s.l}</Mono>
+                    {[1,2,3].map(i => <div key={i} style={{ width: 5, height: 5, borderRadius: 1, background: i <= s.v ? stressColor(s.v) : `${C.creamDark}50` }} />)}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
       <BottomNav tab="library" setTab={() => {}} />
     </div>
   )
