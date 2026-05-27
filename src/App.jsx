@@ -207,6 +207,53 @@ const matchExpanded = (e, pairs) => {
   }
   return false
 }
+
+// Layer 3c: Compute per-value result counts for each filter dropdown.
+// Each field's counts respect the OTHER active filters + search (with alias expansion),
+// excluding the field's own selection. Answers "how many remain if I pick this value?"
+// IMPORTANT: mirrors the existing filter chain in ExerciseLibraryTab — keep them in sync.
+const computeFilterCounts = (exercises, search, filterPattern, filterMuscle, filterEquip, filterCategory, aliasIndex) => {
+  const counts = { pattern: {}, muscle: {}, equipment: {}, category: {} }
+  const fields = ['pattern', 'muscle', 'equipment', 'category']
+
+  for (const field of fields) {
+    const sCtx = search
+    const fP = field === 'pattern' ? '' : filterPattern
+    const fM = field === 'muscle' ? '' : filterMuscle
+    const fE = field === 'equipment' ? '' : filterEquip
+    const fC = field === 'category' ? '' : filterCategory
+    const expandedPairs = expandQuery(sCtx, aliasIndex)
+    const q = (sCtx || '').toLowerCase()
+
+    for (const e of exercises) {
+      // Mirror existing filter chain — if any change there, change here too
+      const matchSearch = !sCtx || e.name.toLowerCase().includes(q) ||
+        (e.aliases || []).some(a => a.toLowerCase().includes(q)) ||
+        (e.primary_muscles || []).some(m => m.toLowerCase().includes(q)) ||
+        matchExpanded(e, expandedPairs)
+      const matchPattern = !fP || e.movement_pattern === fP
+      const matchEquip = !fE || (e.equipment || []).includes(fE)
+      const matchMuscle = !fM || (e.primary_muscles || []).includes(fM)
+      const matchCategory = !fC || e.category === fC
+      if (!(matchSearch && matchPattern && matchEquip && matchMuscle && matchCategory)) continue
+
+      if (field === 'pattern' && e.movement_pattern) {
+        counts.pattern[e.movement_pattern] = (counts.pattern[e.movement_pattern] || 0) + 1
+      } else if (field === 'muscle') {
+        for (const m of (e.primary_muscles || [])) {
+          counts.muscle[m] = (counts.muscle[m] || 0) + 1
+        }
+      } else if (field === 'equipment') {
+        for (const eq of (e.equipment || [])) {
+          counts.equipment[eq] = (counts.equipment[eq] || 0) + 1
+        }
+      } else if (field === 'category' && e.category) {
+        counts.category[e.category] = (counts.category[e.category] || 0) + 1
+      }
+    }
+  }
+  return counts
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ExercisePicker = ({ label, value, onChange, placeholder, exerciseLib, aliasIndex }) => {
@@ -1871,6 +1918,7 @@ function ExerciseLibraryTab() {
   const categories = [...new Set(exercises.map(e => e.category).filter(Boolean))].sort()
 
   const expandedPairs = expandQuery(search, aliasIndex)
+  const filterCounts = computeFilterCounts(exercises, search, filterPattern, filterMuscle, filterEquip, filterCategory, aliasIndex)
 
   const filtered = exercises.filter(e => {
     const q = search.toLowerCase()
@@ -2126,34 +2174,48 @@ function ExerciseLibraryTab() {
         <select value={filterPattern} onChange={e => setFilterPattern(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Patterns</option>
-          {groupOptions(patterns, PATTERN_GROUPS).map(section => (
-            <optgroup key={section.label} label={section.label}>
-              {section.items.map(p => <option key={p} value={p}>{prettifyLabel(p)}</option>)}
-            </optgroup>
-          ))}
+          {groupOptions(patterns, PATTERN_GROUPS).map(section => {
+            const items = section.items.filter(p => (filterCounts.pattern[p] || 0) > 0 || p === filterPattern)
+            if (items.length === 0) return null
+            return (
+              <optgroup key={section.label} label={section.label}>
+                {items.map(p => <option key={p} value={p}>{prettifyLabel(p)} ({filterCounts.pattern[p] || 0})</option>)}
+              </optgroup>
+            )
+          })}
         </select>
         <select value={filterMuscle} onChange={e => setFilterMuscle(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Muscles</option>
-          {groupOptions(muscles, MUSCLE_GROUPS).map(section => (
-            <optgroup key={section.label} label={section.label}>
-              {section.items.map(m => <option key={m} value={m}>{prettifyLabel(m)}</option>)}
-            </optgroup>
-          ))}
+          {groupOptions(muscles, MUSCLE_GROUPS).map(section => {
+            const items = section.items.filter(m => (filterCounts.muscle[m] || 0) > 0 || m === filterMuscle)
+            if (items.length === 0) return null
+            return (
+              <optgroup key={section.label} label={section.label}>
+                {items.map(m => <option key={m} value={m}>{prettifyLabel(m)} ({filterCounts.muscle[m] || 0})</option>)}
+              </optgroup>
+            )
+          })}
         </select>
         <select value={filterEquip} onChange={e => setFilterEquip(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Equipment</option>
-          {groupOptions(equipments, EQUIPMENT_GROUPS).map(section => (
-            <optgroup key={section.label} label={section.label}>
-              {section.items.map(eq => <option key={eq} value={eq}>{prettifyLabel(eq)}</option>)}
-            </optgroup>
-          ))}
+          {groupOptions(equipments, EQUIPMENT_GROUPS).map(section => {
+            const items = section.items.filter(eq => (filterCounts.equipment[eq] || 0) > 0 || eq === filterEquip)
+            if (items.length === 0) return null
+            return (
+              <optgroup key={section.label} label={section.label}>
+                {items.map(eq => <option key={eq} value={eq}>{prettifyLabel(eq)} ({filterCounts.equipment[eq] || 0})</option>)}
+              </optgroup>
+            )
+          })}
         </select>
         <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Categories</option>
-          {categories.map(c => <option key={c} value={c}>{prettifyLabel(c)}</option>)}
+          {categories
+            .filter(c => (filterCounts.category[c] || 0) > 0 || c === filterCategory)
+            .map(c => <option key={c} value={c}>{prettifyLabel(c)} ({filterCounts.category[c] || 0})</option>)}
         </select>
         {(filterPattern || filterMuscle || filterEquip || filterCategory || search) && (
           <button onClick={() => { setFilterPattern(''); setFilterMuscle(''); setFilterEquip(''); setFilterCategory(''); setSearch('') }}
