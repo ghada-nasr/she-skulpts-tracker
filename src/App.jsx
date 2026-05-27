@@ -1870,6 +1870,62 @@ function groupOptions(allValues, groups) {
   return sections
 }
 
+// ─── Layer 3e: Pattern hierarchy resolution (DB primary, PATTERN_GROUPS fallback) ───
+// Walks up movement_patterns_hierarchy from a given pattern to find its root section.
+// Falls back to static PATTERN_GROUPS lookup, then to the pattern itself, then 'Other'.
+function resolvePatternSection(pattern, hierarchy) {
+  if (!pattern) return 'Other'
+  // Primary: walk up DB hierarchy to find root (parent === null)
+  if (hierarchy && hierarchy.byCanonical) {
+    let current = pattern
+    let depth = 0
+    while (current && depth < 20) {  // depth limit prevents loops in malformed data
+      const node = hierarchy.byCanonical.get(current)
+      if (!node) break  // pattern not in DB hierarchy — fall through to fallback
+      if (!node.parent) return current  // reached root
+      current = node.parent
+      depth++
+    }
+  }
+  // Fallback: static PATTERN_GROUPS lookup (for patterns not in DB hierarchy)
+  for (const [group, items] of Object.entries(PATTERN_GROUPS)) {
+    if (items.includes(pattern)) return group
+  }
+  return pattern || 'Other'
+}
+
+// Returns display_order for a section label (DB primary, 9999 fallback for non-DB sections).
+function resolvePatternSectionOrder(sectionLabel, hierarchy) {
+  if (hierarchy && hierarchy.byCanonical) {
+    const node = hierarchy.byCanonical.get(sectionLabel)
+    if (node && typeof node.display_order === 'number') return node.display_order
+  }
+  return 9999
+}
+
+// DB-driven pattern grouping for filter dropdown <optgroup> rendering.
+// Returns same shape as groupOptions: [{label, items}, ...]. Items sorted alphabetically.
+// Sections sorted by display_order ASC then label. Static PATTERN_GROUPS used as fallback.
+function groupOptionsByPatternHierarchy(allValues, hierarchy) {
+  const inUse = new Set(allValues)
+  const sectionMap = new Map()  // sectionLabel → Set of patterns
+  for (const pattern of inUse) {
+    const label = resolvePatternSection(pattern, hierarchy)
+    if (!sectionMap.has(label)) sectionMap.set(label, new Set())
+    sectionMap.get(label).add(pattern)
+  }
+  const sections = []
+  for (const [label, items] of sectionMap) {
+    sections.push({ label, items: [...items].sort(), order: resolvePatternSectionOrder(label, hierarchy) })
+  }
+  sections.sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order
+    return a.label.localeCompare(b.label)
+  })
+  return sections
+}
+// ────────────────────────────────────────────────────────────────────
+
 function ExerciseLibraryTab() {
   const [exercises, setExercises] = useState([])
   const [loading, setLoading] = useState(true)
@@ -1887,6 +1943,7 @@ function ExerciseLibraryTab() {
     equipment: 'all',
   })
   const [aliasIndex, setAliasIndex] = useState(null)
+  const [patternHierarchy, setPatternHierarchy] = useState(null)
 
   useEffect(() => { loadExercises() }, [])
 
@@ -1902,6 +1959,21 @@ function ExerciseLibraryTab() {
         idx.get(key).push({ domain: row.domain, canonical: (row.canonical || '').toLowerCase() })
       }
       setAliasIndex(idx)
+    })
+  }, [])
+
+  // Layer 3e: Load movement_patterns_hierarchy once at mount for pattern grouping
+  useEffect(() => {
+    supabase.from('movement_patterns_hierarchy').select('canonical, parent, display_order').then(({ data }) => {
+      const byCanonical = new Map()
+      for (const row of (data || [])) {
+        if (!row.canonical) continue
+        byCanonical.set(row.canonical, {
+          parent: row.parent || null,
+          display_order: typeof row.display_order === 'number' ? row.display_order : 9999,
+        })
+      }
+      setPatternHierarchy({ byCanonical })
     })
   }, [])
 
@@ -1942,10 +2014,7 @@ function ExerciseLibraryTab() {
     if (mode === 'pattern') {
       const p = e.movement_pattern
       if (!p) return 'Uncategorized'
-      for (const [group, items] of Object.entries(PATTERN_GROUPS)) {
-        if (items.includes(p)) return group
-      }
-      return p
+      return resolvePatternSection(p, patternHierarchy)
     }
     if (mode === 'muscle') {
       const m = (e.primary_muscles || [])[0]
@@ -2174,7 +2243,7 @@ function ExerciseLibraryTab() {
         <select value={filterPattern} onChange={e => setFilterPattern(e.target.value)}
           style={{ padding: '5px 10px', borderRadius: 8, border: `1px solid ${C.creamDark}`, background: C.white, fontSize: 10, color: C.sageDark, fontFamily: MONO, outline: 'none' }}>
           <option value="">All Patterns</option>
-          {groupOptions(patterns, PATTERN_GROUPS).map(section => {
+          {groupOptionsByPatternHierarchy(patterns, patternHierarchy).map(section => {
             const items = section.items.filter(p => (filterCounts.pattern[p] || 0) > 0 || p === filterPattern)
             if (items.length === 0) return null
             return (
@@ -2258,6 +2327,11 @@ function ExerciseLibraryTab() {
             const sortedSections = Object.keys(grouped).sort((a, b) => {
               if (a === 'Uncategorized') return 1
               if (b === 'Uncategorized') return -1
+              if (browseMode === 'pattern' && patternHierarchy) {
+                const orderA = resolvePatternSectionOrder(a, patternHierarchy)
+                const orderB = resolvePatternSectionOrder(b, patternHierarchy)
+                if (orderA !== orderB) return orderA - orderB
+              }
               return a.localeCompare(b)
             })
             return sortedSections.map(sectionName => {
